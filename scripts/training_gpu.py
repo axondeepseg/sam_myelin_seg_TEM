@@ -21,32 +21,18 @@ from segment_anything.utils.transforms import ResizeLongestSide
 
 
 IVADOMED_TRAINING_SUBJECTS = [
-    nyuMouse07,
-    nyuMouse09,
-    nyuMouse11,
-    nyuMouse12,
-    nyuMouse14,
-    nyuMouse15,
-    nyuMouse27,
-    nyuMouse28,
-    nyuMouse30,
-    nyuMouse31,
-    nyuMouse32,
-    nyuMouse33,
-    nyuMouse35,
-    nyuMouse36
+    'nyuMouse07', 'nyuMouse09', 'nyuMouse11', 'nyuMouse12', 'nyuMouse14',
+    'nyuMouse15', 'nyuMouse27', 'nyuMouse28', 'nyuMouse30', 'nyuMouse31',
+    'nyuMouse32', 'nyuMouse33', 'nyuMouse35', 'nyuMouse36'
 ]
-
 IVADOMED_VALIDATION_SUBJECTS = [
-    nyuMouse10,
-    nyuMouse13,
-    nyuMouse25,
-    nyuMouse29,
-    nyuMouse34    
+    'nyuMouse10', 'nyuMouse13', 'nyuMouse25', 'nyuMouse29', 'nyuMouse34'    
 ]
+IVADOMED_TEST_SUBJECTS = ['nyuMouse26']
 
-datapath = Path('../../data_axondeepseg_tem/')
-derivatives_path = Path('../../scripts/derivatives')
+
+datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives')
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
 
@@ -86,8 +72,8 @@ def show_box(box, ax):
 # Load the initial model checkpoint
 
 model_type = 'vit_b'
-checkpoint = '../../scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:3'
+checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project//scripts/sam_vit_b_01ec64.pth'
+device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -97,6 +83,49 @@ def load_image_embedding(path):
     emb_dict = torch.load(path, device)
     return emb_dict
 
+# utility function to segment the whole image without the SamPredictor class
+def segment_image(sam_model, bboxes, emb_dict, device):
+    
+    original_size = emb_dict['original_size']
+    input_size = emb_dict['input_size']
+    image_embedding = emb_dict['features']
+    full_mask = None
+
+    for axon_id in range(len(bboxes)):
+        prompt = get_myelin_bbox(bboxes, axon_id)
+        if np.isnan(prompt).any():
+                continue
+        
+        with torch.no_grad():
+            box = transform.apply_boxes(prompt, original_size)
+            box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
+            box_torch = box_torch[None, :]
+
+            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                points=None,
+                boxes=box_torch,
+                masks=None,
+            )
+            
+            low_res_mask, _ = sam_model.mask_decoder(
+                image_embeddings=image_embedding,
+                image_pe=sam_model.prompt_encoder.get_dense_pe(),
+                sparse_prompt_embeddings=sparse_embeddings,
+                dense_prompt_embeddings=dense_embeddings,
+                multimask_output=False,
+            )
+            
+            mask = sam_model.postprocess_masks(
+                low_res_mask,
+                input_size,
+                original_size,
+            ).to(device)            
+        if full_mask is None:
+            full_mask = mask
+        else:
+            full_mask = np.logical_or(mask, mask_tuned)
+    
+    return full_mask
 
 # Training hyperparameters
 
@@ -115,21 +144,22 @@ batch_size = 10
 losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 
+train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
+# keep only 1 image for validation
+val_list = IVADOMED_VALIDATION_SUBJECTS[0]
+
 for epoch in range(num_epochs):
     epoch_losses = []
-    data_loader = bids_dataloader(data_dict, maps_path, embeddings_path)
+    train_data_loader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
+    val_data_loader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
-    pbar = tqdm(total=150)
-    for sample in data_loader:
+    pbar = tqdm(total=145)
+    for sample in train_data_loader:
         emb_path, bboxes, myelin_map = sample
         emb_dict = load_image_embedding(emb_path)
         original_size = emb_dict['original_size']
         input_size = emb_dict['input_size']
         image_embedding = emb_dict['features']
-        
-        if 'sub-nyuMouse28_sample-0006' in str(emb_path):
-            # figure to plot all predictions
-            plt.figure(figsize=(10, 10))
         
         # train on every axon in the image
         for axon_id in range(len(bboxes)):
@@ -176,19 +206,16 @@ for epoch in range(num_epochs):
             
             epoch_losses.append(loss.item())
             pbar.set_description(f'Loss: {loss.item()}')
-            
-            if 'sub-nyuMouse28_sample-0006' in str(emb_path):
-                binary_mask = normalize(threshold(upscaled_mask, 0.0, 0))
-                show_mask(binary_mask.cpu().detach().numpy().squeeze(), plt.gca())
+
+            # VALIDATION LOOP
+            for sample in val_dataloader:
+                
+
         # optim step
         optimizer.step()
         optimizer.zero_grad()
         
         pbar.update(1)
-        if 'sub-nyuMouse28_sample-0006' in str(emb_path):
-            plt.axis('off')
-            plt.savefig(f'predictions_epoch_{epoch}')
-            plt.close()
     losses.append(epoch_losses)
     print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
     if epoch % 5 == 0:
