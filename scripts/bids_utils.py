@@ -48,3 +48,23 @@ def index_bids_dataset(datapath):
     print(f'{sample_count} samples collected.')
 
     return data_dict
+
+# data loader providing the myelin map (masks), the bboxes (prompts) 
+# and the path to the pre-computed image embeddings
+def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
+    '''
+    :param data_dict:       paths to raw data and masks
+    :param maps_path:       Prompt dataframe containing bboxes/centroids
+    :param embeddings_path  Index image (output of get_axon_morphometrics)
+    :param sub_list         Subjects to include
+    '''
+    subjects = list(data_dict.keys())
+    print(subjects)
+    # we keep the last subject for testing
+    for sub in subjects[:-1]:
+        samples = (s for s in data_dict[sub].keys() if 'sample' in s)
+        for sample in samples:
+            emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
+            bboxes = get_sample_bboxes(sub, sample, maps_path)
+            myelin_map = get_myelin_map(sub, sample, maps_path)
+            yield (emb_path, bboxes, myelin_map)

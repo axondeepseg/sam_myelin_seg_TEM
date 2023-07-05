@@ -15,7 +15,6 @@ from tqdm import tqdm
 import monai
 
 import sys
-sys.path.append('../../scripts')
 import bids_utils
 from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
