@@ -1,6 +1,22 @@
 from pathlib import Path
 import json
 import pandas as pd
+import cv2
+
+def get_sample_bboxes(subject, sample, maps_path):
+    prompts_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_prompts.csv'
+    prompts_df = pd.read_csv(prompts_fname)
+    return prompts_df[['bbox_min_x', 'bbox_min_y', 'bbox_max_x', 'bbox_max_y']]
+
+def get_myelin_bbox(bbox_df, axon_id):
+    return np.array(bbox_df.iloc[axon_id])
+
+def get_myelin_map(subject, sample, maps_path):
+    map_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_myelinmap.png'
+    return cv2.imread(str(map_fname))
+    
+def get_myelin_mask(myelin_map, axon_id):
+    return 255 * (myelin_map == axon_id + 1)
 
 def index_bids_dataset(datapath):
     '''
@@ -62,11 +78,10 @@ def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
     # # we keep the last subject for testing
     # for sub in subjects[:-1]:
     for sub in subjects:
-        if sub not in sub_list:
-            continue
-        samples = (s for s in data_dict[sub].keys() if 'sample' in s)
-        for sample in samples:
-            emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
-            bboxes = get_sample_bboxes(sub, sample, maps_path)
-            myelin_map = get_myelin_map(sub, sample, maps_path)
-            yield (emb_path, bboxes, myelin_map)
+        if sub in sub_list:
+            samples = (s for s in data_dict[sub].keys() if 'sample' in s)
+            for sample in samples:
+                emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
+                bboxes = get_sample_bboxes(sub, sample, maps_path)
+                myelin_map = get_myelin_map(sub, sample, maps_path)
+                yield (emb_path, bboxes, myelin_map)

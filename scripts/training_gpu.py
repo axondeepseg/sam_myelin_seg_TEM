@@ -21,14 +21,14 @@ from segment_anything.utils.transforms import ResizeLongestSide
 
 
 IVADOMED_TRAINING_SUBJECTS = [
-    'nyuMouse07', 'nyuMouse09', 'nyuMouse11', 'nyuMouse12', 'nyuMouse14',
-    'nyuMouse15', 'nyuMouse27', 'nyuMouse28', 'nyuMouse30', 'nyuMouse31',
-    'nyuMouse32', 'nyuMouse33', 'nyuMouse35', 'nyuMouse36'
+    'sub-nyuMouse07', 'sub-nyuMouse09', 'sub-nyuMouse11', 'sub-nyuMouse12', 'sub-nyuMouse14',
+    'sub-nyuMouse15', 'sub-nyuMouse27', 'sub-nyuMouse28', 'sub-nyuMouse30', 'sub-nyuMouse31',
+    'sub-nyuMouse32', 'sub-nyuMouse33', 'sub-nyuMouse35', 'sub-nyuMouse36'
 ]
 IVADOMED_VALIDATION_SUBJECTS = [
-    'nyuMouse10', 'nyuMouse13', 'nyuMouse25', 'nyuMouse29', 'nyuMouse34'    
+    'sub-nyuMouse10', 'sub-nyuMouse13', 'sub-nyuMouse25', 'sub-nyuMouse29', 'sub-nyuMouse34'    
 ]
-IVADOMED_TEST_SUBJECTS = ['nyuMouse26']
+IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
 
 datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
@@ -119,11 +119,13 @@ def segment_image(sam_model, bboxes, emb_dict, device):
                 low_res_mask,
                 input_size,
                 original_size,
-            ).to(device)            
+            ).to(device)
+            binary_mask = normalize(threshold(mask, 0.0, 0))
+
         if full_mask is None:
-            full_mask = mask
+            full_mask = binary_mask
         else:
-            full_mask = np.logical_or(mask, mask_tuned)
+            full_mask += binary_mask
     
     return full_mask
 
@@ -146,17 +148,18 @@ transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 
 train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
 # keep only 1 image for validation
-val_list = IVADOMED_VALIDATION_SUBJECTS[0]
+val_list = [IVADOMED_VALIDATION_SUBJECTS[0]]
 
 for epoch in range(num_epochs):
     epoch_losses = []
-    train_data_loader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
-    val_data_loader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
+    train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
+    val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
     pbar = tqdm(total=145)
-    for sample in train_data_loader:
+    for sample in train_dataloader:
         emb_path, bboxes, myelin_map = sample
         emb_dict = load_image_embedding(emb_path)
+
         original_size = emb_dict['original_size']
         input_size = emb_dict['input_size']
         image_embedding = emb_dict['features']
@@ -196,7 +199,6 @@ for epoch in range(num_epochs):
                 input_size,
                 original_size,
             ).to(device)
-#             binary_mask = normalize(threshold(upscaled_mask, 0.0, 0))
             
             gt_mask_resized = torch.from_numpy(gt_mask[:,:,0]).unsqueeze(0).unsqueeze(0).to(device)
             gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
@@ -207,19 +209,24 @@ for epoch in range(num_epochs):
             epoch_losses.append(loss.item())
             pbar.set_description(f'Loss: {loss.item()}')
 
-            # VALIDATION LOOP
-            for sample in val_dataloader:
-                
-
         # optim step
         optimizer.step()
         optimizer.zero_grad()
         
         pbar.update(1)
+    
+    # VALIDATION LOOP
+    for sample in val_dataloader:
+        emb_path, bboxes, myelin_map = sample
+        emb_dict = load_image_embedding(emb_path)
+        mask = segment_image(sam_model, bboxes, emb_dict, device)
+        #TODO: HOW DO WE HANDLE VALIDATION IMAGES?
+        # plt.imsave(f'{}_{}.png', mask.detach().numpy().squeeze(), cmap='gray')
+
     losses.append(epoch_losses)
     print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
-    if epoch % 5 == 0:
-        torch.save(sam_model.state_dict(), f'../../scripts/sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
+    if epoch % 10 == 0:
+        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
     
 torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
 
