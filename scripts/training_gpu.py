@@ -20,23 +20,18 @@ from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
 
-# In[ ]:
-
 
 datapath = Path('../../data_axondeepseg_tem/')
 derivatives_path = Path('../../scripts/derivatives')
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
 
+
 data_dict = bids_utils.index_bids_dataset(datapath)
-data_dict
 
 
-# In[ ]:
+# some utility functions to read prompts and labels
 
-
-# utility functions to read prompts and labels
-# %matplotlib inline
 def get_sample_bboxes(subject, sample, maps_path):
     prompts_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_prompts.csv'
     prompts_df = pd.read_csv(prompts_fname)
@@ -65,25 +60,7 @@ def show_box(box, ax):
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
 
-# In[ ]:
-
-
-# data loader providing the myelin map (masks), the bboxes (prompts) 
-# and the path to the pre-computed image embeddings
-def bids_dataloader(data_dict, maps_path, embeddings_path):
-    subjects = list(data_dict.keys())
-    # we keep the last subject for testing
-    for sub in subjects[:-1]:
-        samples = (s for s in data_dict[sub].keys() if 'sample' in s)
-        for sample in samples:
-            emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
-            bboxes = get_sample_bboxes(sub, sample, maps_path)
-            myelin_map = get_myelin_map(sub, sample, maps_path)
-            yield (emb_path, bboxes, myelin_map)
-
-
-# In[ ]:
-
+# Load the initial model checkpoint
 
 model_type = 'vit_b'
 checkpoint = '../../scripts/sam_vit_b_01ec64.pth'
@@ -98,19 +75,15 @@ def load_image_embedding(path):
     return emb_dict
 
 
-# In[ ]:
-
+# Training hyperparameters
 
 lr = 1e-6
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
-
-# loss_fn = torch.nn.MSELoss()
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
-# In[ ]:
-
+# Training loop
 
 from torch.nn.functional import threshold, normalize
 
@@ -201,8 +174,7 @@ for epoch in range(num_epochs):
 torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
 
 
-# In[ ]:
-
+# Plot mean epoch losses
 
 mean_losses = [np.mean(x) for x in losses]
 mean_losses
@@ -213,4 +185,3 @@ plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
 plt.savefig('losses_with_diceloss.png')
-
