@@ -20,12 +20,35 @@ from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
 
+IVADOMED_TRAINING_SUBJECTS = [
+    nyuMouse07,
+    nyuMouse09,
+    nyuMouse11,
+    nyuMouse12,
+    nyuMouse14,
+    nyuMouse15,
+    nyuMouse27,
+    nyuMouse28,
+    nyuMouse30,
+    nyuMouse31,
+    nyuMouse32,
+    nyuMouse33,
+    nyuMouse35,
+    nyuMouse36
+]
+
+IVADOMED_VALIDATION_SUBJECTS = [
+    nyuMouse10,
+    nyuMouse13,
+    nyuMouse25,
+    nyuMouse29,
+    nyuMouse34    
+]
 
 datapath = Path('../../data_axondeepseg_tem/')
 derivatives_path = Path('../../scripts/derivatives')
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
-
 
 data_dict = bids_utils.index_bids_dataset(datapath)
 
