@@ -220,8 +220,9 @@ for epoch in range(num_epochs):
         emb_path, bboxes, myelin_map = sample
         emb_dict = load_image_embedding(emb_path)
         mask = segment_image(sam_model, bboxes, emb_dict, device)
-        #TODO: HOW DO WE HANDLE VALIDATION IMAGES?
-        # plt.imsave(f'{}_{}.png', mask.detach().numpy().squeeze(), cmap='gray')
+
+        fname = emb_path.stem.replace('embedding', 'val-seg.png')
+        plt.imsave(fname, mask.detach().numpy().squeeze(), cmap='gray')
 
     losses.append(epoch_losses)
     print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
