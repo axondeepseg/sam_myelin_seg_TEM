@@ -53,15 +53,17 @@ def index_bids_dataset(datapath):
 # and the path to the pre-computed image embeddings
 def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
     '''
-    :param data_dict:       paths to raw data and masks
-    :param maps_path:       Prompt dataframe containing bboxes/centroids
-    :param embeddings_path  Index image (output of get_axon_morphometrics)
-    :param sub_list         Subjects to include
+    :param data_dict:       contains img, mask and px_size info per sample per subject
+    :param maps_path:       paths to myelin maps (instance masks)
+    :param embeddings_path  paths to pre-computed image embeddings
+    :param sub_list         subjects included
     '''
     subjects = list(data_dict.keys())
-    print(subjects)
-    # we keep the last subject for testing
-    for sub in subjects[:-1]:
+    # # we keep the last subject for testing
+    # for sub in subjects[:-1]:
+    for sub in subjects:
+        if sub not in sub_list:
+            continue
         samples = (s for s in data_dict[sub].keys() if 'sample' in s)
         for sample in samples:
             emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
