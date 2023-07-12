@@ -222,7 +222,7 @@ for epoch in range(num_epochs):
         mask = segment_image(sam_model, bboxes, emb_dict, device)
 
         fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
-        plt.imsave(fname, mask.detach().numpy().squeeze(), cmap='gray')
+        plt.imsave(fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     losses.append(epoch_losses)
     print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
