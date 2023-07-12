@@ -143,7 +143,7 @@ from torch.nn.functional import threshold, normalize
 
 num_epochs = 100
 batch_size = 10
-losses = []
+mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 
 train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
@@ -224,8 +224,8 @@ for epoch in range(num_epochs):
         fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
         plt.imsave(fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
-    losses.append(epoch_losses)
-    print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
+    mean_epoch_losses.append(np.mean(epoch_losses))
+    print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
     if epoch % 10 == 0:
         torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
     
@@ -234,10 +234,7 @@ torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_dic
 
 # Plot mean epoch losses
 
-mean_losses = [np.mean(x) for x in losses]
-mean_losses
-
-plt.plot(list(range(len(mean_losses))), mean_losses)
+plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
 plt.title('Mean epoch loss')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
