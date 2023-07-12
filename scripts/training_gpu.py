@@ -31,8 +31,8 @@ IVADOMED_VALIDATION_SUBJECTS = [
 IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
 
-datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives')
+datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
 
@@ -72,8 +72,8 @@ def show_box(box, ax):
 # Load the initial model checkpoint
 
 model_type = 'vit_b'
-checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project//scripts/sam_vit_b_01ec64.pth'
-device = 'cpu'
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -141,7 +141,7 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 from torch.nn.functional import threshold, normalize
 
-num_epochs = 40
+num_epochs = 100
 batch_size = 10
 losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
@@ -221,7 +221,7 @@ for epoch in range(num_epochs):
         emb_dict = load_image_embedding(emb_path)
         mask = segment_image(sam_model, bboxes, emb_dict, device)
 
-        fname = emb_path.stem.replace('embedding', 'val-seg.png')
+        fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
         plt.imsave(fname, mask.detach().numpy().squeeze(), cmap='gray')
 
     losses.append(epoch_losses)
