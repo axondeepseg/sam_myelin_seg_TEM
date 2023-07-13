@@ -215,14 +215,14 @@ for epoch in range(num_epochs):
         
         pbar.update(1)
     
-    # VALIDATION LOOP
-    for sample in val_dataloader:
-        emb_path, bboxes, myelin_map = sample
-        emb_dict = load_image_embedding(emb_path)
-        mask = segment_image(sam_model, bboxes, emb_dict, device)
-
-        fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
-        plt.imsave('validation_results' / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
+    # validation loop every 5 epochs to avoid cluttering
+    if epoch % 5 == 0
+        for sample in val_dataloader:
+            emb_path, bboxes, myelin_map = sample
+            emb_dict = load_image_embedding(emb_path)
+            mask = segment_image(sam_model, bboxes, emb_dict, device)
+            fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
+            plt.imsave('validation_results' / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
