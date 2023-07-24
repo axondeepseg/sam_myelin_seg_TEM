@@ -31,18 +31,19 @@ IVADOMED_VALIDATION_SUBJECTS = [
 IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
 
-datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+labels_path = datapath / 'derivatives' / 'labels'
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
 data_dict = bids_utils.index_bids_dataset(datapath)
 
 # some utility functions to read prompts and labels
-def get_axon_mask(subject, sample, axonseg_path):
-    axon_suffix = 'seg-axon-manual'
-    axon_path = axonseg_path / subject / 'micr' / f'{subject}_{sample}_{axon_suffix}.png'
+def get_axon_mask(axon_label_path):
     #TODO: check intensity range - masks are expected to be 0 or 255
-    return cv2.imread(str(axon_path))
+    return cv2.imread(str(axon_label_path), cv2.IMREAD_GRAYSCALE)
 
 # helper functions to display masks/bboxes
 def show_mask(mask, ax):
@@ -59,8 +60,10 @@ def show_box(box, ax):
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
+# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
+checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+# device = 'cuda:0'
+device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -99,51 +102,48 @@ for epoch in range(num_epochs):
         emb_path, _, _ = sample
         emb_dict = load_image_embedding(emb_path)
 
+        # extract subject and sample from embedding path
+        label_fname = str(emb_path.name).replace('embedding.pt', 'seg-axon-manual.png')
+        subject = str(emb_path.stem).split('_')[0]
+        axon_label_path = labels_path / subject / 'micr' / label_fname
+
         original_size = emb_dict['original_size']
         input_size = emb_dict['input_size']
         image_embedding = emb_dict['features']
         
-        # train on every axon in the image
-        for axon_id in range(len(bboxes)):
-            # get mask and bbox prompt
-            prompt = get_myelin_bbox(bboxes, axon_id)
-            gt_mask = get_myelin_mask(myelin_map, axon_id)
+        # get mask
+        gt_mask = get_axon_mask(axon_label_path)
+        with torch.no_grad():
+            H, W = gt_mask.shape
+            box = np.array([[0,0,W,H]])
+            box = transform.apply_boxes(box, original_size)
+            box_torch = torch.as_tensor(box, dtype=torch.float, device=device)[None, :]
 
-            # empty masks should not be processed
-            if np.isnan(prompt).any():
-                continue
-            # no grad for the prompt encoder
-            with torch.no_grad():
-                box = transform.apply_boxes(prompt, original_size)
-                box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
-                box_torch = box_torch[None, :]
-                
-                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                    points=None,
-                    boxes=box_torch,
-                    masks=None,
-                )
-            # now we pass the image and prompt embeddings in the mask decoder
-            low_res_mask, _ = sam_model.mask_decoder(
-                image_embeddings=image_embedding,
-                image_pe=sam_model.prompt_encoder.get_dense_pe(),
-                sparse_prompt_embeddings=sparse_embeddings,
-                dense_prompt_embeddings=dense_embeddings,
-                multimask_output=False,
+            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                points=None,
+                boxes=box_torch,
+                masks=None,
             )
-            upscaled_mask = sam_model.postprocess_masks(
-                low_res_mask,
-                input_size,
-                original_size,
-            ).to(device)
+        low_res_mask, _, = sam_model.mask_decoder(
+            image_embeddings=image_embedding,
+            image_pe=sam_model.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=False,
+        )
+        upscaled_mask = sam_model.postprocess_masks(
+            low_res_mask,
+            input_size,
+            original_size,
+        ).to(device)
+
+        gt_mask_resized = torch.from_numpy(gt_mask[:,:]).unsqueeze(0).unsqueeze(0).to(device)
+        gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
             
-            gt_mask_resized = torch.from_numpy(gt_mask[:,:,0]).unsqueeze(0).unsqueeze(0).to(device)
-            gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
-            
-            loss = loss_fn(upscaled_mask, gt_binary_mask)
-            loss.backward()
-            epoch_losses.append(loss.item())
-            pbar.set_description(f'Loss: {loss.item()}')
+        loss = loss_fn(upscaled_mask, gt_binary_mask)
+        loss.backward()
+        epoch_losses.append(loss.item())
+        pbar.set_description(f'Loss: {loss.item()}')
         # step the optimizer
         optimizer.step()
         optimizer.zero_grad()
@@ -155,7 +155,7 @@ for epoch in range(num_epochs):
             emb_path, bboxes, myelin_map = sample
             emb_dict = load_image_embedding(emb_path)
             mask = segment_image(sam_model, bboxes, emb_dict, device)
-            fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
+            fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
             plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
@@ -167,8 +167,8 @@ torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_dic
 # Plot mean epoch losses
 
 plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
-plt.title('Mean epoch loss')
+plt.title('Mean epoch loss for axon segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
-plt.savefig('losses_with_diceloss.png')
+plt.savefig('losses_axon_seg.png')
