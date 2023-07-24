@@ -70,54 +70,7 @@ def load_image_embedding(path):
     emb_dict = torch.load(path, device)
     return emb_dict
 
-# utility function to segment the whole image without the SamPredictor class
-def segment_image(sam_model, bboxes, emb_dict, device):
-    
-    original_size = emb_dict['original_size']
-    input_size = emb_dict['input_size']
-    image_embedding = emb_dict['features']
-    full_mask = None
-
-    for axon_id in range(len(bboxes)):
-        prompt = get_myelin_bbox(bboxes, axon_id)
-        if np.isnan(prompt).any():
-                continue
-        
-        with torch.no_grad():
-            box = transform.apply_boxes(prompt, original_size)
-            box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
-            box_torch = box_torch[None, :]
-
-            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                points=None,
-                boxes=box_torch,
-                masks=None,
-            )
-            
-            low_res_mask, _ = sam_model.mask_decoder(
-                image_embeddings=image_embedding,
-                image_pe=sam_model.prompt_encoder.get_dense_pe(),
-                sparse_prompt_embeddings=sparse_embeddings,
-                dense_prompt_embeddings=dense_embeddings,
-                multimask_output=False,
-            )
-            
-            mask = sam_model.postprocess_masks(
-                low_res_mask,
-                input_size,
-                original_size,
-            ).to(device)
-            binary_mask = normalize(threshold(mask, 0.0, 0))
-
-        if full_mask is None:
-            full_mask = binary_mask
-        else:
-            full_mask += binary_mask
-    
-    return full_mask
-
 # Training hyperparameters
-
 lr = 1e-6
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
@@ -125,7 +78,6 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-
 from torch.nn.functional import threshold, normalize
 
 num_epochs = 100
