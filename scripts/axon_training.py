@@ -154,15 +154,41 @@ for epoch in range(num_epochs):
         for sample in val_dataloader:
             emb_path, bboxes, myelin_map = sample
             emb_dict = load_image_embedding(emb_path)
-            mask = segment_image(sam_model, bboxes, emb_dict, device)
+            W, H = emb_dict['original_size']
+            input_size = emb_dict['input_size']
+            image_embedding = emb_dict['features']
+            with torch.no_grad():
+                box = np.array([[0,0,W,H]])
+                box = transform.apply_boxes(box, original_size)
+                box_torch = torch.as_tensor(box, dtype=torch.float, device=device)[None, :]
+
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=None,
+                    boxes=box_torch,
+                    masks=None,
+                )  
+                low_res_mask, _ = sam_model.mask_decoder(
+                    image_embeddings=image_embedding,
+                    image_pe=sam_model.prompt_encoder.get_dense_pe(),
+                    sparse_prompt_embeddings=sparse_embeddings,
+                    dense_prompt_embeddings=dense_embeddings,
+                    multimask_output=False,
+                )
+                mask = sam_model.postprocess_masks(
+                    low_res_mask,
+                    input_size,
+                    original_size,
+                ).to(device)
+                binary_mask = normalize(threshold(mask, 0.0, 0))    
+
             fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
-            plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
+            plt.imsave(Path('scripts/axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
     if epoch % 10 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
-torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
+        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg.pth')
+torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_auto-axon-seg.pth')
 
 # Plot mean epoch losses
 
