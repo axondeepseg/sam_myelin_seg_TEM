@@ -169,11 +169,10 @@ for epoch in range(num_epochs):
             # get mask and bbox prompt
             prompt = get_myelin_bbox(bboxes, axon_id)
             gt_mask = get_myelin_mask(myelin_map, axon_id)
-            
+
             # empty masks should not be processed
             if np.isnan(prompt).any():
                 continue
-                
             # no grad for the prompt encoder
             with torch.no_grad():
                 box = transform.apply_boxes(prompt, original_size)
@@ -193,7 +192,6 @@ for epoch in range(num_epochs):
                 dense_prompt_embeddings=dense_embeddings,
                 multimask_output=False,
             )
-            
             upscaled_mask = sam_model.postprocess_masks(
                 low_res_mask,
                 input_size,
@@ -205,14 +203,11 @@ for epoch in range(num_epochs):
             
             loss = loss_fn(upscaled_mask, gt_binary_mask)
             loss.backward()
-            
             epoch_losses.append(loss.item())
             pbar.set_description(f'Loss: {loss.item()}')
-
-        # optim step
+        # step the optimizer
         optimizer.step()
         optimizer.zero_grad()
-        
         pbar.update(1)
     
     # VALIDATION LOOP
@@ -228,9 +223,7 @@ for epoch in range(num_epochs):
     print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
     if epoch % 10 == 0:
         torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
-    
 torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
-
 
 # Plot mean epoch losses
 
