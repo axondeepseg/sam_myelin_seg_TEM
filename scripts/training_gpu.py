@@ -31,8 +31,8 @@ IVADOMED_VALIDATION_SUBJECTS = [
 IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
 
-datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives')
+datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
 
@@ -72,8 +72,8 @@ def show_box(box, ax):
 # Load the initial model checkpoint
 
 model_type = 'vit_b'
-checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project//scripts/sam_vit_b_01ec64.pth'
-device = 'cpu'
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -141,9 +141,9 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 from torch.nn.functional import threshold, normalize
 
-num_epochs = 40
+num_epochs = 100
 batch_size = 10
-losses = []
+mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 
 train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
@@ -210,27 +210,24 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         pbar.update(1)
     
-    # VALIDATION LOOP
-    for sample in val_dataloader:
-        emb_path, bboxes, myelin_map = sample
-        emb_dict = load_image_embedding(emb_path)
-        mask = segment_image(sam_model, bboxes, emb_dict, device)
+    # validation loop every 5 epochs to avoid cluttering
+    if epoch % 5 == 0
+        for sample in val_dataloader:
+            emb_path, bboxes, myelin_map = sample
+            emb_dict = load_image_embedding(emb_path)
+            mask = segment_image(sam_model, bboxes, emb_dict, device)
+            fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
+            plt.imsave('validation_results' / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
-        fname = emb_path.stem.replace('embedding', 'val-seg.png')
-        plt.imsave(fname, mask.detach().numpy().squeeze(), cmap='gray')
-
-    losses.append(epoch_losses)
-    print(f'EPOCH {epoch} MEAN LOSS: {np.mean(epoch_losses)}')
+    mean_epoch_losses.append(np.mean(epoch_losses))
+    print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
     if epoch % 10 == 0:
         torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
 torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
 
 # Plot mean epoch losses
 
-mean_losses = [np.mean(x) for x in losses]
-mean_losses
-
-plt.plot(list(range(len(mean_losses))), mean_losses)
+plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
 plt.title('Mean epoch loss')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
