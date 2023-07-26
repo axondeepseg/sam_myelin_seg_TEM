@@ -31,10 +31,10 @@ IVADOMED_VALIDATION_SUBJECTS = [
 IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
 
-# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
 labels_path = datapath / 'derivatives' / 'labels'
 embeddings_path = derivatives_path / 'embeddings'
 maps_path = derivatives_path / 'maps'
@@ -60,10 +60,10 @@ def show_box(box, ax):
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
-# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
-checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
-# device = 'cuda:0'
-device = 'cpu'
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
+#checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+device = 'cuda:0'
+#device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -74,7 +74,7 @@ def load_image_embedding(path):
     return emb_dict
 
 # Training hyperparameters
-lr = 1e-6
+lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
@@ -83,7 +83,7 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 # Training loop
 from torch.nn.functional import threshold, normalize
 
-num_epochs = 100
+num_epochs = 150
 batch_size = 10
 mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
@@ -97,7 +97,7 @@ for epoch in range(num_epochs):
     train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
     val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
-    pbar = tqdm(total=145)
+    pbar = tqdm(total=142)
     for sample in train_dataloader:
         emb_path, _, _ = sample
         emb_dict = load_image_embedding(emb_path)
@@ -183,11 +183,11 @@ for epoch in range(num_epochs):
                 binary_mask = normalize(threshold(mask, 0.0, 0))
 
             fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
-            plt.imsave(Path('scripts/axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
+            plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
-    if epoch % 10 == 0:
+    if epoch % 20 == 0:
         torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg.pth')
 torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg.pth')
 
@@ -198,4 +198,4 @@ plt.title('Mean epoch loss for axon segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
-plt.savefig('losses_axon_seg.png')
+plt.savefig('losses_axon_seg_150epoch_lr1e-4.png')
