@@ -30,13 +30,14 @@ def main(args):
     H, W = predictor.original_size
     prompt = np.array([[0,0,W-1,H-1]])
 
-    mask = predictor.predict(
+    mask, _, _ = predictor.predict(
         point_coords=None,
         box=prompt,
         multimask_output=False
     )
 
-    print(mask)
+    fname = f'{Path(image_path).stem}_axonseg.png'
+    cv2.imwrite(fname, mask * 255)
 
 
 if __name__ == "__main__":
