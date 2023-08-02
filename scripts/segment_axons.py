@@ -23,7 +23,8 @@ def main(args):
     device = args['device']
     
     predictor = get_predictor(model_type, checkpoint, device)
-    predictor.set_image(image_path)
+    image = cv2.imread(image_path)
+    predictor.set_image(image)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
