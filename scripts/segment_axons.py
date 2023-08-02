@@ -37,7 +37,7 @@ def main(args):
     )
 
     fname = f'{Path(image_path).stem}_axonseg.png'
-    cv2.imwrite(fname, mask * 255)
+    cv2.imwrite(fname, mask[0] * 255)
 
 
 if __name__ == "__main__":
