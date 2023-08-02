@@ -59,11 +59,9 @@ def show_box(box, ax):
 
 
 # Load the initial model checkpoint
-model_type = 'vit_b'
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
-#checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+model_type = 'vit_h'
+checkpoint = 'sam_vit_h_4b8939.pth'
 device = 'cuda:0'
-#device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -187,9 +185,9 @@ for epoch in range(num_epochs):
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
-    if epoch % 20 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg.pth')
-torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg.pth')
+    if epoch % 40 == 0:
+        torch.save(sam_model.state_dict(), f'sam_vit_h_4b8939_epoch_{epoch}_auto-axon-seg.pth')
+torch.save(sam_model.state_dict(), 'sam_vit_h_4b8939_finetuned_auto-axon-seg.pth')
 
 # Plot mean epoch losses
 
@@ -198,4 +196,4 @@ plt.title('Mean epoch loss for axon segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
-plt.savefig('losses_axon_seg_150epoch_lr1e-4.png')
+plt.savefig('losses_axon_seg_vit_h.png')
