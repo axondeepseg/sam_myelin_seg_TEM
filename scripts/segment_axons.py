@@ -10,16 +10,19 @@ import cv2
 import torch
 from segment_anything import SamPredictor, sam_model_registry
 
+def get_predictor(model_type, checkpoint, device):
+    sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
+    sam_model.to(device)
+    return SamPredictor(sam_model)
+
+
 def main(args):
     model_type = args['model_type']
     checkpoint = args['checkpoint']
     image_path = args['img']
-
-    sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
-    sam_model.to(args['device'])
+    device = args['device']
     
-    # compute image embedding
-    predictor = SamPredictor(sam_model)
+    predictor = get_predictor(model_type, checkpoint, device)
     predictor.set_image(image_path)
 
 if __name__ == "__main__":
