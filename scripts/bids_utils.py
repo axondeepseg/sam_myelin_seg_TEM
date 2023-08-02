@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import pandas as pd
 import cv2
+import random
 
 def get_sample_bboxes(subject, sample, maps_path):
     prompts_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_prompts.csv'
@@ -75,8 +76,6 @@ def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
     :param sub_list         subjects included
     '''
     subjects = list(data_dict.keys())
-    # # we keep the last subject for testing
-    # for sub in subjects[:-1]:
     for sub in subjects:
         if sub in sub_list:
             samples = (s for s in data_dict[sub].keys() if 'sample' in s)
