@@ -26,6 +26,19 @@ def main(args):
     image = cv2.imread(image_path)
     predictor.set_image(image)
 
+    # get full bbox prompt
+    H, W = predictor.original_size
+    prompt = np.array([[0,0,W-1,H-1]])
+
+    mask = predictor.predict(
+        point_coords=None,
+        box=prompt,
+        multimask_output=False
+    )
+
+    print(mask)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
