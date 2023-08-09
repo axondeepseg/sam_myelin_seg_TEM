@@ -13,7 +13,7 @@ from pathlib import Path
 from argparse import ArgumentParser
 from tqdm import tqdm
 
-from bids_utils import index_bids_dataset
+from utils.bids_utils import index_bids_dataset
 
 
 IVADOMED_VALIDATION_SUBJECTS = ['sub-nyuMouse10']
