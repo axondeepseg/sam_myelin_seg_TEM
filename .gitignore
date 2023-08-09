@@ -8,4 +8,4 @@ data_axondeepseg_tem
 notebook/training/*.png
 .vscode
 *validation_results/
-
+tem_split
