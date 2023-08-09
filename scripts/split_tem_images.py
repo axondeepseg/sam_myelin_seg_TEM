@@ -59,8 +59,8 @@ def main(datapath, out_path):
             cv2.imwrite(f'{img_fname}b_TEM.png', img_b)
             
             gt_fname = str(gt_path / f'{sub}_{sample}')
-            cv2.imwrite(f'{gt_fname}a_TEM_Seg-axon-manual.png', gt_a)
-            cv2.imwrite(f'{gt_fname}b_TEM_Seg-axon-manual.png', gt_b)
+            cv2.imwrite(f'{gt_fname}a_TEM_seg-axon-manual.png', gt_a)
+            cv2.imwrite(f'{gt_fname}b_TEM_seg-axon-manual.png', gt_b)
     print('Preprocessing done.')
 
 
