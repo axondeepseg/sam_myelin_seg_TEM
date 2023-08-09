@@ -93,7 +93,7 @@ class AxonDataset(Dataset):
     '''Dataset class for axon training
     This will return a resized image and an unresized ground truth. After 
     inference, the mask can be resized with sam_model.postprocess_masks given
-    the original image size so that it matches the GT shape
+    the original image size so that it matches the GT shape.
     '''
     def __init__(self, data_root):
         self.data_root = Path(data_root)
@@ -115,7 +115,7 @@ class AxonDataset(Dataset):
         img = cv2.imread(str(img_fname), cv2.IMREAD_GRAYSCALE)
         gt = cv2.imread(str(gt_fname), cv2.IMREAD_GRAYSCALE)
         # assert img and gt initially have same dimensions
-        assert img.shape == gt.shape, "image and ground truth should hae the same size"
+        assert img.shape == gt.shape, "image and ground truth should have the same size"
         original_size = img.shape
         # NOTE: we only resize the image; GT is kept at original size
         img_1024 = self.transform.apply_image(img)
@@ -125,5 +125,6 @@ class AxonDataset(Dataset):
         return (
             torch.tensor(img_1024).float(),
             torch.tensor(gt).long(),
-            torch.tensor(original_size)
+            torch.tensor(original_size),
+            img_fname
         )
