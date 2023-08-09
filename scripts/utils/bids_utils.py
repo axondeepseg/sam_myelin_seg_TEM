@@ -3,6 +3,10 @@ import json
 import pandas as pd
 import cv2
 import random
+import torch
+from torch.utils.data import Dataset
+from segment_anything.utils.transforms import ResizeLongestSide
+
 
 def get_sample_bboxes(subject, sample, maps_path):
     prompts_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_prompts.csv'
@@ -84,3 +88,42 @@ def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
                 bboxes = get_sample_bboxes(sub, sample, maps_path)
                 myelin_map = get_myelin_map(sub, sample, maps_path)
                 yield (emb_path, bboxes, myelin_map)
+
+class AxonDataset(Dataset):
+    '''Dataset class for axon training
+    This will return a resized image and an unresized ground truth. After 
+    inference, the mask can be resized with sam_model.postprocess_masks given
+    the original image size so that it matches the GT shape
+    '''
+    def __init__(self, data_root):
+        self.data_root = Path(data_root)
+        self.img_path = self.data_root / 'imgs'
+        self.gt_path = self.data_root / 'gts'
+        self.file_paths = sorted(list(self.img_path.glob("*.png")))
+
+        self.transform = ResizeLongestSide(1024)
+        print(f"number of images: {len(self.file_paths)}")
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, index):
+        # load image and corresponding gt
+        img_fname = self.file_paths[index]
+        gt_fname = img_fname.name.replace('TEM.png', 'TEM_seg-axon-manual.png')
+        gt_fname = self.gt_path / gt_fname
+        img = cv2.imread(str(img_fname), cv2.IMREAD_GRAYSCALE)
+        gt = cv2.imread(str(gt_fname), cv2.IMREAD_GRAYSCALE)
+        # assert img and gt initially have same dimensions
+        assert img.shape == gt.shape, "image and ground truth should hae the same size"
+        original_size = img.shape
+        # NOTE: we only resize the image; GT is kept at original size
+        img_1024 = self.transform.apply_image(img)
+        # convert shape to channel-first (in our case expand first dim)
+        img_1024 = img_1024[None, :, :]
+        gt = gt[None, :, :]
+        return (
+            torch.tensor(img_1024).float(),
+            torch.tensor(gt).long(),
+            torch.tensor(original_size)
+        )
