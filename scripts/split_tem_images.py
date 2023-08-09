@@ -30,8 +30,8 @@ def main(datapath, out_path):
         samples = (s for s in data_dict[sub].keys() if 'sample' in s)
         for sample in samples:
             # load image and gt
-            img = cv2.imread(data_dict[sub][sample]['image'])
-            gt = cv2.imread(data_dict[sub][sample]['axon'])
+            img = cv2.imread(data_dict[sub][sample]['image'], cv2.IMREAD_GRAYSCALE)
+            gt = cv2.imread(data_dict[sub][sample]['axon'], cv2.IMREAD_GRAYSCALE)
             # split in 2
             width = img.shape[1]
             img_a = img[:,:width//2]
