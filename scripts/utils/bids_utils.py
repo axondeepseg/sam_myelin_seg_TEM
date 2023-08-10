@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import pandas as pd
+import numpy as np
 import cv2
 import random
 import torch
@@ -119,12 +120,12 @@ class AxonDataset(Dataset):
         original_size = img.shape
         # NOTE: we only resize the image; GT is kept at original size
         img_1024 = self.transform.apply_image(img)
-        # convert shape to channel-first (in our case expand first dim)
-        img_1024 = img_1024[None, :, :]
+        # convert shape to channel-first (in our case expand first dim to 3 channels)
+        img_1024 = np.broadcast_to(img_1024, (3, img_1024.shape[0], img_1024.shape[1]))
         gt = gt[None, :, :]
         return (
             torch.tensor(img_1024).float(),
             torch.tensor(gt).long(),
             torch.tensor(original_size),
-            img_fname
+            str(img_fname)
         )
