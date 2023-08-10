@@ -8,36 +8,26 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-import torch
 import pandas as pd
 from collections import defaultdict
 from tqdm import tqdm
-import monai
-
 import sys
-import bids_utils
+
+import torch
+from torch.nn.functional import threshold, normalize
+from torch.utils.data import DataLoader
+import monai
 from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
-
-IVADOMED_TRAINING_SUBJECTS = [
-    'sub-nyuMouse07', 'sub-nyuMouse09', 'sub-nyuMouse11', 'sub-nyuMouse12', 'sub-nyuMouse14',
-    'sub-nyuMouse15', 'sub-nyuMouse27', 'sub-nyuMouse28', 'sub-nyuMouse30', 'sub-nyuMouse31',
-    'sub-nyuMouse32', 'sub-nyuMouse33', 'sub-nyuMouse35', 'sub-nyuMouse36'
-]
-IVADOMED_VALIDATION_SUBJECTS = [
-    'sub-nyuMouse10', 'sub-nyuMouse13', 'sub-nyuMouse25', 'sub-nyuMouse29', 'sub-nyuMouse34'    
-]
-IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
+from utils import bids_utils
 
 
-datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
 labels_path = datapath / 'derivatives' / 'labels'
-embeddings_path = derivatives_path / 'embeddings'
-maps_path = derivatives_path / 'maps'
 data_dict = bids_utils.index_bids_dataset(datapath)
 
 # some utility functions to read prompts and labels
@@ -59,9 +49,10 @@ def show_box(box, ax):
 
 
 # Load the initial model checkpoint
-model_type = 'vit_h'
-checkpoint = 'sam_vit_h_4b8939.pth'
-device = 'cuda:0'
+model_type = 'vit_b'
+checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
+# device = 'cuda:0'
+device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -79,49 +70,47 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-from torch.nn.functional import threshold, normalize
-
-num_epochs = 150
-batch_size = 10
+num_epochs = 100
+batch_size = 3
 mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
-
-train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
-# keep only 1 subject for validation
-val_list = [IVADOMED_VALIDATION_SUBJECTS[0]]
+preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split/train/'
+train_dset = bids_utils.AxonDataset(preprocessed_data_path)
+train_dataloader = DataLoader(
+    train_dset,
+    batch_size = batch_size,
+    shuffle=True,
+)
 
 for epoch in range(num_epochs):
     epoch_losses = []
-    train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
-    val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
-    
-    pbar = tqdm(total=142)
-    for sample in train_dataloader:
-        emb_path, _, _ = sample
-        emb_dict = load_image_embedding(emb_path)
 
-        # extract subject and sample from embedding path
-        label_fname = str(emb_path.name).replace('embedding.pt', 'seg-axon-manual.png')
-        subject = str(emb_path.stem).split('_')[0]
-        axon_label_path = labels_path / subject / 'micr' / label_fname
-
-        original_size = emb_dict['original_size']
-        input_size = emb_dict['input_size']
-        image_embedding = emb_dict['features']
+    for (imgs, gts, sizes, names) in tqdm(train_dataloader):
         
-        # get mask
-        gt_mask = get_axon_mask(axon_label_path)
+        # IMAGE ENCODER
+        input_size = imgs.shape
+        imgs = sam_model.preprocess(imgs.to(device))
+        image_embedding = sam_model.image_encoder(imgs)
+        
+        # PROMPT ENCODER
         with torch.no_grad():
-            H, W = original_size
-            box = np.array([[0,0,W-1,H-1]])
-            box = transform.apply_boxes(box, original_size)
-            box_torch = torch.as_tensor(box, dtype=torch.float, device=device)[None, :]
+            H, W = sizes[:,0], sizes[:, 1]
+            boxes = torch.stack([
+                torch.zeros_like(H),
+                torch.zeros_like(H),
+                W-1,
+                H-1
+            ]).t()
+            boxes = transform.apply_boxes_torch(boxes, sizes.transpose(0,1))
+            box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
 
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                 points=None,
                 boxes=box_torch,
                 masks=None,
             )
+
+        # MASK DECODER
         low_res_mask, _, = sam_model.mask_decoder(
             image_embeddings=image_embedding,
             image_pe=sam_model.prompt_encoder.get_dense_pe(),
@@ -131,63 +120,61 @@ for epoch in range(num_epochs):
         )
         upscaled_mask = sam_model.postprocess_masks(
             low_res_mask,
-            input_size,
-            original_size,
+            input_size=input_size[-2:],
+            original_size=(sizes[0][0], sizes[0][1]),
         ).to(device)
 
-        gt_mask_resized = torch.from_numpy(gt_mask[:,:]).unsqueeze(0).unsqueeze(0).to(device)
+        gt_mask_resized = gts.to(device)
         gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
             
         loss = loss_fn(upscaled_mask, gt_binary_mask)
         loss.backward()
         epoch_losses.append(loss.item())
-        pbar.set_description(f'Loss: {loss.item()}')
-        # step the optimizer
         optimizer.step()
         optimizer.zero_grad()
-        pbar.update(1)
     
     # validation loop every 5 epochs to avoid cluttering
-    if epoch % 5 == 0:
-        for sample in val_dataloader:
-            emb_path, bboxes, myelin_map = sample
-            emb_dict = load_image_embedding(emb_path)
-            original_size = emb_dict['original_size']
-            H, W = original_size
-            input_size = emb_dict['input_size']
-            image_embedding = emb_dict['features']
-            with torch.no_grad():
-                box = np.array([[0,0,W-1,H-1]])
-                box_torch = transform.apply_boxes(box, original_size)
-                box_torch = torch.as_tensor(box_torch, dtype=torch.float, device=device)[None, :]
+    #TODO validation loop needs to be updated
+    # if epoch % 5 == 0:
+    #     for sample in val_dataloader:
+    #         emb_path, bboxes, myelin_map = sample
+    #         emb_dict = load_image_embedding(emb_path)
+    #         original_size = emb_dict['original_size']
+    #         H, W = original_size
+    #         input_size = emb_dict['input_size']
+    #         image_embedding = emb_dict['features']
+    #         with torch.no_grad():
+    #             box = np.array([[0,0,W-1,H-1]])
+    #             box_torch = transform.apply_boxes(box, original_size)
+    #             box_torch = torch.as_tensor(box_torch, dtype=torch.float, device=device)[None, :]
 
-                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                    points=None,
-                    boxes=box_torch,
-                    masks=None,
-                )  
-                low_res_mask, _ = sam_model.mask_decoder(
-                    image_embeddings=image_embedding,
-                    image_pe=sam_model.prompt_encoder.get_dense_pe(),
-                    sparse_prompt_embeddings=sparse_embeddings,
-                    dense_prompt_embeddings=dense_embeddings,
-                    multimask_output=False,
-                )
-                mask = sam_model.postprocess_masks(
-                    low_res_mask,
-                    input_size,
-                    original_size,
-                ).to(device)
-                binary_mask = normalize(threshold(mask, 0.0, 0))
+    #             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+    #                 points=None,
+    #                 boxes=box_torch,
+    #                 masks=None,
+    #             )  
+    #             low_res_mask, _ = sam_model.mask_decoder(
+    #                 image_embeddings=image_embedding,
+    #                 image_pe=sam_model.prompt_encoder.get_dense_pe(),
+    #                 sparse_prompt_embeddings=sparse_embeddings,
+    #                 dense_prompt_embeddings=dense_embeddings,
+    #                 multimask_output=False,
+    #             )
+    #             mask = sam_model.postprocess_masks(
+    #                 low_res_mask,
+    #                 input_size,
+    #                 original_size,
+    #             ).to(device)
+    #             binary_mask = normalize(threshold(mask, 0.0, 0))
 
-            fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
-            plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
+    #         fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
+    #         plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
     if epoch % 40 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_h_4b8939_epoch_{epoch}_auto-axon-seg.pth')
-torch.save(sam_model.state_dict(), 'sam_vit_h_4b8939_finetuned_auto-axon-seg.pth')
+        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg.pth')
+torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg.pth')
 
 # Plot mean epoch losses
 
