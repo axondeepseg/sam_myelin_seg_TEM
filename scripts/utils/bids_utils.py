@@ -97,6 +97,18 @@ class AxonDataset(Dataset):
     the original image size so that it matches the GT shape.
     '''
     def __init__(self, data_root):
+        '''
+        Expected data structure
+        data_root/
+        ├─ imgs/
+        │  ├─ img1.png
+        │  ├─ img2.png
+        │  ├─ ...
+        ├─ gts/
+        │  ├─ img1_seg-axon-manual.png
+        │  ├─ img2_seg-axon-manual.png
+        │  ├─ ...
+        '''
         self.data_root = Path(data_root)
         self.img_path = self.data_root / 'imgs'
         self.gt_path = self.data_root / 'gts'
