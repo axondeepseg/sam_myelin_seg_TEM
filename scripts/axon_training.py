@@ -24,9 +24,18 @@ from utils import bids_utils
 
 
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-#datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-#derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
+preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/train/'
+val_preprocessed_datapath = 'home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/val/'
+# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+# device = 'cpu'
+# preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split/train/'
+# val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split/val/'
+
+
 labels_path = datapath / 'derivatives' / 'labels'
 data_dict = bids_utils.index_bids_dataset(datapath)
 
@@ -45,9 +54,6 @@ def show_box(box, ax):
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
-#device = 'cpu'
 
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
@@ -65,11 +71,10 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-num_epochs = 100
-batch_size = 4
+num_epochs = 10
+batch_size = 1
 mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
-preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/train/'
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
 train_dataloader = DataLoader(
     train_dset,
@@ -77,9 +82,15 @@ train_dataloader = DataLoader(
     shuffle=True,
 )
 
+val_dset = bids_utils.AxonDataset(val_preprocessed_datapath)
+val_dataloader = DataLoader(val_dset, batch_size=1)
+
 for epoch in range(num_epochs):
     epoch_losses = []
+    val_epochs = []
+    val_losses = []
 
+    sam_model.train()
     for (imgs, gts, sizes, names) in tqdm(train_dataloader):
         
         # IMAGE ENCODER
@@ -89,7 +100,6 @@ for epoch in range(num_epochs):
         
         # PROMPT ENCODER
         with torch.no_grad():
-#            H, W = sizes[:,0], sizes[:, 1]
             H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
             boxes = torch.stack([
                 torch.zeros_like(H),
@@ -97,7 +107,6 @@ for epoch in range(num_epochs):
                 W-1,
                 H-1
             ]).t()[None, :]
-#            boxes = transform.apply_boxes_torch(boxes, sizes.transpose(0,1))
             box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
 
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
@@ -128,46 +137,52 @@ for epoch in range(num_epochs):
         epoch_losses.append(loss.item())
         optimizer.step()
         optimizer.zero_grad()
+        break
     
     # validation loop every 5 epochs to avoid cluttering
     #TODO validation loop needs to be updated
-    # if epoch % 5 == 0:
-    #     for sample in val_dataloader:
-    #         emb_path, bboxes, myelin_map = sample
-    #         emb_dict = load_image_embedding(emb_path)
-    #         original_size = emb_dict['original_size']
-    #         H, W = original_size
-    #         input_size = emb_dict['input_size']
-    #         image_embedding = emb_dict['features']
-    #         with torch.no_grad():
-    #             box = np.array([[0,0,W-1,H-1]])
-    #             box_torch = transform.apply_boxes(box, original_size)
-    #             box_torch = torch.as_tensor(box_torch, dtype=torch.float, device=device)[None, :]
+    if epoch % 5 == 0:
+        sam_model.eval()
+        for (val_imgs, val_gts, sizes, names) in val_dataloader:
+            with torch.no_grad():
+                input_size = val_imgs.shape
+                val_imgs = sam_model.preprocess(val_imgs.to(device))
+                image_embedding = sam_model.image_encoder(val_imgs)
+                H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
+                val_boxes = torch.stack([torch.zeros_like(H), torch.zeros_like(H), W-1, H-1]).t()[None, :]
+                val_boxes = torch.as_tensor(val_boxes, dtype=torch.float, device=device)
 
-    #             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-    #                 points=None,
-    #                 boxes=box_torch,
-    #                 masks=None,
-    #             )  
-    #             low_res_mask, _ = sam_model.mask_decoder(
-    #                 image_embeddings=image_embedding,
-    #                 image_pe=sam_model.prompt_encoder.get_dense_pe(),
-    #                 sparse_prompt_embeddings=sparse_embeddings,
-    #                 dense_prompt_embeddings=dense_embeddings,
-    #                 multimask_output=False,
-    #             )
-    #             mask = sam_model.postprocess_masks(
-    #                 low_res_mask,
-    #                 input_size,
-    #                 original_size,
-    #             ).to(device)
-    #             binary_mask = normalize(threshold(mask, 0.0, 0))
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=None,
+                    boxes=val_boxes,
+                    masks=None,
+                )  
+                low_res_mask, _ = sam_model.mask_decoder(
+                    image_embeddings=image_embedding,
+                    image_pe=sam_model.prompt_encoder.get_dense_pe(),
+                    sparse_prompt_embeddings=sparse_embeddings,
+                    dense_prompt_embeddings=dense_embeddings,
+                    multimask_output=False,
+                )
+                upscaled_mask = sam_model.postprocess_masks(
+                    low_res_mask,
+                    input_size=input_size[-2:],
+                    original_size=(sizes[0][0], sizes[0][1]),
+                ).to(device)
 
+            val_gts = val_gts.to(device)
+            gt_binary_mask = torch.as_tensor(val_gts > 0, dtype=torch.float32)
+            #TODO: compute, print, store validation loss (no grad)
+            val_loss = loss_fn(upscaled_mask, gt_binary_mask)
+            val_losses.append(val_loss.item())
+            val_epochs.append(epoch)
+            #TODO: save validation img
     #         fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
     #         plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
-    print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
+    mean_val_losses.append(np.mean(val_losses))
+    print(f'EPOCH {epoch}\n\tMEAN LOSS: {mean_epoch_losses[-1]}\n\tMEAN VAL LOSS: {mean_val_losses[-1]}')
     if epoch % 40 == 0:
         torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg.pth')
 torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg.pth')
@@ -175,8 +190,11 @@ torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg.pth
 # Plot mean epoch losses
 
 plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
+plt.plot(val_epochs, mean_val_losses)
+plt.legend(['Training loss', 'Validation loss'])
 plt.title('Mean epoch loss for axon segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
-
 plt.savefig('losses_axon_seg_vit_h.png')
+
+# Plot validation losses
