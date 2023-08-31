@@ -52,7 +52,7 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
-def load_centroid_prompts(csv_paths):
+def load_centroid_prompts(csv_paths, device):
     N = 0
     prompts = []
     for path in csv_paths:
@@ -62,9 +62,9 @@ def load_centroid_prompts(csv_paths):
     # create labels: actual coords = 1 for foreground point; padding = -1
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
-    labels = torch.stack(labels)
+    labels = torch.stack(labels).to(device)
     # pad prompts
-    prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts])
+    prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
 
     return prompts, labels
 
@@ -126,7 +126,7 @@ for epoch in range(num_epochs):
                 names = [Path(n).name for n in names]
                 prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
-                prompts, labels = load_centroid_prompts(prompt_paths)
+                prompts, labels = load_centroid_prompts(prompt_paths, device)
                 sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                     points=(prompts, labels),
                     boxes=None,
