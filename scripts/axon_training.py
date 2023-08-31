@@ -127,6 +127,9 @@ for epoch in range(num_epochs):
                 prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
                 prompts, labels = load_centroid_prompts(prompt_paths, device)
+                prompts = transform.apply_coords_torch(prompts, (sizes[0][0], sizes[0][1]))
+                # note: for this to work, might need to modify SAM source files;
+                # see https://github.com/facebookresearch/segment-anything/issues/365
                 sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                     points=(prompts, labels),
                     boxes=None,
