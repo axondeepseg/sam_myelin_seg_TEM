@@ -23,22 +23,22 @@ from segment_anything.utils.transforms import ResizeLongestSide
 from utils import bids_utils
 
 
-datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
-preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/train/'
-val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/val/'
-# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
-# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
-# device = 'cpu'
-# preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split/train/'
-# val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split/val/'
+# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
+# device = 'cuda:0'
+# preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/train/'
+# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/val/'
+datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+device = 'cpu'
+preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 
 
-labels_path = datapath / 'derivatives' / 'labels'
 data_dict = bids_utils.index_bids_dataset(datapath)
+maps_path = derivatives_path / 'maps'
 
 # helper functions to display masks/bboxes
 def show_mask(mask, ax):
@@ -52,6 +52,13 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
+def load_centroid_prompts(csv_paths):
+    max_len = 0
+    prompts = []
+    for path in csv_paths:
+        centroids = pd.read_csv(path).iloc[:, 1:3]
+        max_len = len(centroids) if len(centroids) > max_len else max_len
+        
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
@@ -72,12 +79,13 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-num_epochs = 400
-batch_size = 4
+num_epochs = 200
+batch_size = 1
 mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
 val_frequency = 5
+prompt_with_centroids = True
 
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
@@ -104,14 +112,23 @@ for epoch in range(num_epochs):
         
         # PROMPT ENCODER
         with torch.no_grad():
-            H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
-            boxes = torch.stack([
-                torch.zeros_like(H),
-                torch.zeros_like(H),
-                W-1,
-                H-1
-            ]).t()[None, :]
-            box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
+            
+            if prompt_with_centroids:
+                names = [Path(n).name for n in names]
+                prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
+                prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
+                print(prompt_paths)
+                pass
+            else:
+                # use full bbox
+                H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
+                boxes = torch.stack([
+                    torch.zeros_like(H),
+                    torch.zeros_like(H),
+                    W-1,
+                    H-1
+                ]).t()[None, :]
+                box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
 
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                 points=None,
