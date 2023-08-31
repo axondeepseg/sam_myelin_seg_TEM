@@ -23,18 +23,18 @@ from segment_anything.utils.transforms import ResizeLongestSide
 from utils import bids_utils
 
 
-# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-# device = 'cuda:0'
-# preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
-checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
-device = 'cpu'
-preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
+preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+# device = 'cpu'
+# preprocessed_data_path = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+# val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 
 
 data_dict = bids_utils.index_bids_dataset(datapath)
@@ -117,7 +117,7 @@ for epoch in range(num_epochs):
         # IMAGE ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        # image_embedding = sam_model.image_encoder(imgs)
+        image_embedding = sam_model.image_encoder(imgs)
         
         # PROMPT ENCODER
         with torch.no_grad():
@@ -128,8 +128,8 @@ for epoch in range(num_epochs):
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
                 prompts, labels = load_centroid_prompts(prompt_paths)
                 sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                    points=None,
                     points=(prompts, labels),
+                    boxes=None,
                     masks=None,
                 )
             else:
