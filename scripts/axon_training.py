@@ -87,12 +87,12 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-num_epochs = 300
+num_epochs = 100
 batch_size = 4
 mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
-val_frequency = 5
+val_frequency = 4
 prompt_with_centroids = True
 run_id='run5'
 
@@ -106,6 +106,7 @@ train_dataloader = DataLoader(
 
 val_dset = bids_utils.AxonDataset(val_preprocessed_datapath)
 val_dataloader = DataLoader(val_dset, batch_size=1)
+best_val_loss = 1_000
 
 for epoch in range(num_epochs):
     epoch_losses = []
@@ -208,21 +209,24 @@ for epoch in range(num_epochs):
 
             val_gts = val_gts.to(device)
             gt_binary_mask = torch.as_tensor(val_gts > 0, dtype=torch.float32)
-            #TODO: compute, print, store validation loss (no grad)
+
             val_loss = loss_fn(upscaled_mask, gt_binary_mask)
             val_losses.append(val_loss.item())
-            #TODO: save validation img
-    #         fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
-    #         plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
+
+        mean_val_loss = np.mean(val_losses)
+        mean_val_losses.append(mean_val_loss)
+        print(f'\tMEAN VAL LOSS: {mean_val_losses[-1]}')
+        if mean_val_loss < best_val_loss:
+            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg_{run_id}_best.pth')
+    # TODO: save validation img
+    # fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
+    # plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch}\n\tMEAN LOSS: {mean_epoch_losses[-1]}')
-    if epoch % val_frequency == 0:
-        mean_val_losses.append(np.mean(val_losses))
-        print(f'\tMEAN VAL LOSS: {mean_val_losses[-1]}')
-    if epoch % 40 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg_{run_id}.pth')
-torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_finetuned_auto-axon-seg_{run_id}.pth')
+
+# save final checkpoint
+torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_auto-axon-seg_{run_id}_final.pth')
 
 # Plot mean epoch losses
 
