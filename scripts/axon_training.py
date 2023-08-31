@@ -231,6 +231,7 @@ for epoch in range(num_epochs):
         print(f'EPOCH {epoch}\n\tMEAN VAL LOSS: {mean_val_losses[-1]}')
         if mean_val_loss < best_val_loss:
             print("\tSaving best model.")
+            best_val_loss = mean_val_loss
             torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch{epoch}_auto-axon-seg_{run_id}_best.pth')
     # TODO: save validation img
     # fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
