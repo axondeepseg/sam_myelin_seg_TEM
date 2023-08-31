@@ -14,7 +14,7 @@ from tqdm import tqdm
 import sys
 
 import torch
-from torch.nn.functional import threshold, normalize
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import monai
 from segment_anything import SamPredictor, sam_model_registry
@@ -27,8 +27,8 @@ from utils import bids_utils
 # derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
 # checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
 # device = 'cuda:0'
-# preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/train/'
-# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split/val/'
+# preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
 derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
 checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
@@ -53,12 +53,20 @@ def show_box(box, ax):
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
 def load_centroid_prompts(csv_paths):
-    max_len = 0
+    N = 0
     prompts = []
     for path in csv_paths:
         centroids = pd.read_csv(path).iloc[:, 1:3]
-        max_len = len(centroids) if len(centroids) > max_len else max_len
-        
+        N = len(centroids) if len(centroids) > N else N
+        prompts.append(torch.tensor(centroids.values))
+    # create labels: actual coords = 1 for foreground point; padding = -1
+    labels = [torch.ones_like(p[:,0]) for p in prompts]
+    labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
+    labels = torch.stack(labels)
+    # pad prompts
+    prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts])
+
+    return prompts, labels
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
@@ -79,13 +87,14 @@ loss_fn = monai.losses.DiceLoss(sigmoid=True)
 
 
 # Training loop
-num_epochs = 200
-batch_size = 1
+num_epochs = 300
+batch_size = 4
 mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
 val_frequency = 5
 prompt_with_centroids = True
+run_id='run5'
 
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
@@ -108,7 +117,7 @@ for epoch in range(num_epochs):
         # IMAGE ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        image_embedding = sam_model.image_encoder(imgs)
+        # image_embedding = sam_model.image_encoder(imgs)
         
         # PROMPT ENCODER
         with torch.no_grad():
@@ -117,8 +126,12 @@ for epoch in range(num_epochs):
                 names = [Path(n).name for n in names]
                 prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
-                print(prompt_paths)
-                pass
+                prompts, labels = load_centroid_prompts(prompt_paths)
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=None,
+                    points=(prompts, labels),
+                    masks=None,
+                )
             else:
                 # use full bbox
                 H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
@@ -129,12 +142,11 @@ for epoch in range(num_epochs):
                     H-1
                 ]).t()[None, :]
                 box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
-
-            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                points=None,
-                boxes=box_torch,
-                masks=None,
-            )
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=None,
+                    boxes=box_torch,
+                    masks=None,
+                )
 
         # MASK DECODER
         low_res_mask, _, = sam_model.mask_decoder(
@@ -206,8 +218,8 @@ for epoch in range(num_epochs):
         mean_val_losses.append(np.mean(val_losses))
         print(f'\tMEAN VAL LOSS: {mean_val_losses[-1]}')
     if epoch % 40 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg_run4.pth')
-torch.save(sam_model.state_dict(), 'sam_vit_b_01ec64_finetuned_auto-axon-seg_run4.pth')
+        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg_{run_id}.pth')
+torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_finetuned_auto-axon-seg_{run_id}.pth')
 
 # Plot mean epoch losses
 
@@ -219,4 +231,4 @@ plt.legend(['Training loss', 'Validation loss'])
 plt.title('Mean epoch loss for axon segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
-plt.savefig('losses_axon_seg_vit_b_run4.png')
+plt.savefig(f'losses_axon_seg_vit_b_{run_id}.png')
