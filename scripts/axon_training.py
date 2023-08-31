@@ -228,7 +228,7 @@ for epoch in range(num_epochs):
 
         mean_val_loss = np.mean(val_losses)
         mean_val_losses.append(mean_val_loss)
-        print(f'\tMEAN VAL LOSS: {mean_val_losses[-1]}')
+        print(f'EPOCH {epoch}\n\tMEAN VAL LOSS: {mean_val_losses[-1]}')
         if mean_val_loss < best_val_loss:
             print("\tSaving best model.")
             torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch{epoch}_auto-axon-seg_{run_id}_best.pth')
