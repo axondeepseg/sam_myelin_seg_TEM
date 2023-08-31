@@ -180,20 +180,33 @@ for epoch in range(num_epochs):
     if epoch % val_frequency == 0:
         sam_model.eval()
         val_epochs.append(epoch)
-        for (val_imgs, val_gts, sizes, names) in val_dataloader:
+        for (val_imgs, val_gts, val_sizes, val_names) in val_dataloader:
             with torch.no_grad():
                 input_size = val_imgs.shape
                 val_imgs = sam_model.preprocess(val_imgs.to(device))
                 image_embedding = sam_model.image_encoder(val_imgs)
-                H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
-                val_boxes = torch.stack([torch.zeros_like(H), torch.zeros_like(H), W-1, H-1]).t()[None, :]
-                val_boxes = torch.as_tensor(val_boxes, dtype=torch.float, device=device)
-
-                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                    points=None,
-                    boxes=val_boxes,
-                    masks=None,
-                )  
+                
+                if prompt_with_centroids:
+                    val_names = [Path(n).name for n in val_names]
+                    val_prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in val_names]
+                    val_prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in val_prompt_paths]
+                    val_prompts, val_labels = load_centroid_prompts(val_prompt_paths, device)
+                    val_prompts = transform.apply_coords_torch(val_prompts, (val_sizes[0][0], val_sizes[0][1]))
+                    sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                        points=(val_prompts, val_labels),
+                        boxes=None,
+                        masks=None,
+                    )
+                else:
+                    H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
+                    val_boxes = torch.stack([torch.zeros_like(H), torch.zeros_like(H), W-1, H-1]).t()[None, :]
+                    val_boxes = torch.as_tensor(val_boxes, dtype=torch.float, device=device)
+                    sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                        points=None,
+                        boxes=val_boxes,
+                        masks=None,
+                    )  
+                
                 low_res_mask, _ = sam_model.mask_decoder(
                     image_embeddings=image_embedding,
                     image_pe=sam_model.prompt_encoder.get_dense_pe(),
@@ -217,7 +230,8 @@ for epoch in range(num_epochs):
         mean_val_losses.append(mean_val_loss)
         print(f'\tMEAN VAL LOSS: {mean_val_losses[-1]}')
         if mean_val_loss < best_val_loss:
-            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_auto-axon-seg_{run_id}_best.pth')
+            print("\tSaving best model.")
+            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch{epoch}_auto-axon-seg_{run_id}_best.pth')
     # TODO: save validation img
     # fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
     # plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
