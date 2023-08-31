@@ -107,6 +107,7 @@ train_dataloader = DataLoader(
 val_dset = bids_utils.AxonDataset(val_preprocessed_datapath)
 val_dataloader = DataLoader(val_dset, batch_size=1)
 best_val_loss = 1_000
+best_val_epoch = -1
 
 for epoch in range(num_epochs):
     epoch_losses = []
@@ -232,7 +233,8 @@ for epoch in range(num_epochs):
         if mean_val_loss < best_val_loss:
             print("\tSaving best model.")
             best_val_loss = mean_val_loss
-            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch{epoch}_auto-axon-seg_{run_id}_best.pth')
+            best_val_epoch = epoch
+            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_auto-axon-seg_{run_id}_best.pth')
     # TODO: save validation img
     # fname = emb_path.stem.replace('embedding', f'val-seg-axon_epoch{epoch}.png')
     # plt.imsave(Path('axon_validation_results') / fname, binary_mask.cpu().detach().numpy().squeeze(), cmap='gray')
@@ -240,6 +242,7 @@ for epoch in range(num_epochs):
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch}\n\tMEAN LOSS: {mean_epoch_losses[-1]}')
 
+print(f'Best model checkpoint was saved at epoch {best_val_epoch}.')
 # save final checkpoint
 torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_auto-axon-seg_{run_id}_final.pth')
 
