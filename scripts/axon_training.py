@@ -2,7 +2,8 @@
 # coding: utf-8
 
 # This script launches training for automatic axon segmentation (predicts
-# the full mask, unlike the myelin training pipeline)
+# the full mask, unlike the myelin training pipeline). We can prompt the 
+# model either with the full image bounding box or with the axon centroids.
 
 from pathlib import Path
 import numpy as np
@@ -53,6 +54,11 @@ def show_box(box, ax):
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
 def load_centroid_prompts(csv_paths, device):
+    '''
+    Loads axon centroids from CSV derivative file to prompt SAM,
+    which expects a tuple with the coordinates and their associated
+    label (foreground or background point)
+    '''
     N = 0
     prompts = []
     for path in csv_paths:
@@ -63,30 +69,22 @@ def load_centroid_prompts(csv_paths, device):
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
     labels = torch.stack(labels).to(device)
-    # pad prompts
+    # pad prompts and stack them in a tensor
     prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
 
     return prompts, labels
 
 # Load the initial model checkpoint
 model_type = 'vit_b'
-
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
 sam_model.train()
-
-def load_image_embedding(path):
-    emb_dict = torch.load(path, device)
-    return emb_dict
 
 # Training hyperparameters
 lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
-
-
-# Training loop
 num_epochs = 100
 batch_size = 4
 mean_epoch_losses = []
