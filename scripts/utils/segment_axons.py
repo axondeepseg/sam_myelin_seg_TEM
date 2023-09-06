@@ -56,11 +56,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Required positional argument
-    parser.add_argument("img", help="Path to the image")
     parser.add_argument("checkpoint", help="Model checkpoint")
+    parser.add_argument("img", help="Path to the image")
 
     # Optional argument which requires a parameter (eg. -d test)
-    parser.add_argument("-m", "--model_type", default="vit_b", help="Model type")
+    parser.add_argument("-m", "--model_type", help="Model type", default="vit_b")
     parser.add_argument("-d", "--device", help="Torch device", default='cpu')
     parser.add_argument("-c", "--centroid_file", help="Path to CSV file containing axon centroids.", default=None)
 
