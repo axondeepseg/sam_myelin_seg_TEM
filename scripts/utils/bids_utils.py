@@ -6,6 +6,7 @@ import cv2
 import random
 import torch
 from torch.utils.data import Dataset
+import torch.nn.functional as F
 from segment_anything.utils.transforms import ResizeLongestSide
 
 

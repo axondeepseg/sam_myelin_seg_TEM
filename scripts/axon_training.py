@@ -15,7 +15,6 @@ from tqdm import tqdm
 import sys
 
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import monai
 from segment_anything import SamPredictor, sam_model_registry
