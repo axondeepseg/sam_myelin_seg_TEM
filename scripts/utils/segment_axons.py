@@ -31,10 +31,9 @@ def main(args):
 
     if prompt_with_centroids:
         points, labels = bids_utils.load_centroid_prompts([args['centroid_file']], device)
-        print("POINTS SHAPE -> ", points.shape)
         mask, _, _ = predictor.predict(
-            point_coords=points,
-            point_labels=labels,
+            point_coords=points[0].cpu().numpy(),
+            point_labels=labels[0],
             box=None,
             multimask_output=False
         )
