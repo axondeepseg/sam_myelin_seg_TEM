@@ -102,6 +102,7 @@ for epoch in range(num_epochs):
         with torch.no_grad():
             
             if prompt_with_centroids:
+                # infer the path to the CSV file containing the list of axon centroids
                 names = [Path(n).name for n in names]
                 prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
