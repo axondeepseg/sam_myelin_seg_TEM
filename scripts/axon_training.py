@@ -53,27 +53,6 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
-def load_centroid_prompts(csv_paths, device):
-    '''
-    Loads axon centroids from CSV derivative file to prompt SAM,
-    which expects a tuple with the coordinates and their associated
-    label (foreground or background point)
-    '''
-    N = 0
-    prompts = []
-    for path in csv_paths:
-        centroids = pd.read_csv(path).iloc[:, 1:3]
-        N = len(centroids) if len(centroids) > N else N
-        prompts.append(torch.tensor(centroids.values))
-    # create labels: actual coords = 1 for foreground point; padding = -1
-    labels = [torch.ones_like(p[:,0]) for p in prompts]
-    labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
-    labels = torch.stack(labels).to(device)
-    # pad prompts and stack them in a tensor
-    prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
-
-    return prompts, labels
-
 # Load the initial model checkpoint
 model_type = 'vit_b'
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
@@ -126,7 +105,7 @@ for epoch in range(num_epochs):
                 names = [Path(n).name for n in names]
                 prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
                 prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
-                prompts, labels = load_centroid_prompts(prompt_paths, device)
+                prompts, labels = bids_utils.load_centroid_prompts(prompt_paths, device)
                 prompts = transform.apply_coords_torch(prompts, (sizes[0][0], sizes[0][1]))
                 # note: for this to work, might need to modify SAM source files;
                 # see https://github.com/facebookresearch/segment-anything/issues/365
@@ -189,7 +168,7 @@ for epoch in range(num_epochs):
                     val_names = [Path(n).name for n in val_names]
                     val_prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in val_names]
                     val_prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in val_prompt_paths]
-                    val_prompts, val_labels = load_centroid_prompts(val_prompt_paths, device)
+                    val_prompts, val_labels = bids_utils.load_centroid_prompts(val_prompt_paths, device)
                     val_prompts = transform.apply_coords_torch(val_prompts, (val_sizes[0][0], val_sizes[0][1]))
                     sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                         points=(val_prompts, val_labels),

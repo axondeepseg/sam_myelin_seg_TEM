@@ -24,6 +24,27 @@ def get_myelin_map(subject, sample, maps_path):
 def get_myelin_mask(myelin_map, axon_id):
     return 255 * (myelin_map == axon_id + 1)
 
+def load_centroid_prompts(csv_paths, device):
+    '''
+    Loads axon centroids from CSV derivative file to prompt SAM,
+    which expects a tuple with the coordinates and their associated
+    label (foreground or background point)
+    '''
+    N = 0
+    prompts = []
+    for path in csv_paths:
+        centroids = pd.read_csv(path).iloc[:, 1:3]
+        N = len(centroids) if len(centroids) > N else N
+        prompts.append(torch.tensor(centroids.values))
+    # create labels: actual coords = 1 for foreground point; padding = -1
+    labels = [torch.ones_like(p[:,0]) for p in prompts]
+    labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
+    labels = torch.stack(labels).to(device)
+    # pad prompts and stack them in a tensor
+    prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
+
+    return prompts, labels
+
 def index_bids_dataset(datapath):
     '''
     Index an arbitrary BIDS dataset and return a data dictionary containing all images, 
