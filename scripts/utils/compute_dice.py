@@ -1,4 +1,4 @@
-from monai.metrics import DiceMetric
+from monai.metrics import DiceMetric, MeanIoU
 import numpy as np
 import cv2
 import torch
@@ -12,7 +12,10 @@ def main():
     gt_suffix = '_TEM_seg-axon-manual.png'
     
     metric = DiceMetric()
+    metric2 = MeanIoU()
     mean_sam, mean_ads = 0, 0
+    mean2_sam, mean2_ads = 0, 0
+    print('         SAM               IVADOMED')
     for sample in range(1, 9):
         sam_fname = fname_base + str(sample) + sam_suffix
         ads_fname = fname_base + str(sample) + ads_suffix
@@ -26,9 +29,18 @@ def main():
         ads_score = metric(torch.from_numpy(ads)[None], torch.from_numpy(gt)[None])[0][0]
         mean_sam += sam_score
         mean_ads += ads_score
-        print(sam_score, ads_score)
-    print(f'SAM MEAN: {mean_sam / 8}')
-    print(f'ADS MEAN: {mean_ads / 8}')  
+
+        sam_score2 = metric2(torch.from_numpy(pred)[None], torch.from_numpy(gt)[None])[0][0]
+        ads_score2 = metric2(torch.from_numpy(ads)[None], torch.from_numpy(gt)[None])[0][0]
+        mean2_sam += sam_score2
+        mean2_ads += ads_score2
+        print('DICE: ', sam_score.item(), ads_score.item())
+        print('IoU:  ', sam_score2.item(), ads_score2.item())
+    print(f'SAM MEAN DICE: {mean_sam / 8}')
+    print(f'ADS MEAN DICE: {mean_ads / 8}')
+    print(f'SAM MEAN IoU: {mean2_sam / 8}')
+    print(f'ADS MEAN IoU: {mean2_ads / 8}')    
+
 
 if __name__ == '__main__':
     main()
