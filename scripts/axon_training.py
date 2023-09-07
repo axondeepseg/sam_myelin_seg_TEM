@@ -52,11 +52,17 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
 
+if device != 'cpu':
+    print('Available memory before loading model: ', torch.cuda.memory_allocated(0))
+
 # Load the initial model checkpoint
 model_type = 'vit_b'
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
 sam_model.train()
+
+if device != 'cpu':
+    print('Available memory after loading model: ', torch.cuda.memory_allocated(0))
 
 # Training hyperparameters
 lr = 1e-4
@@ -92,6 +98,8 @@ for epoch in range(num_epochs):
     sam_model.train()
     for (imgs, gts, sizes, names) in tqdm(train_dataloader):
         
+        if device != 'cpu':
+            print('Available memory after loading imgs: ', torch.cuda.memory_allocated(0))
         # IMAGE ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
