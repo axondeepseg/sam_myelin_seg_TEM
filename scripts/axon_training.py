@@ -62,7 +62,8 @@ sam_model.train()
 lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
-loss_fn = monai.losses.DiceLoss(sigmoid=True)
+# loss_fn = monai.losses.DiceLoss(sigmoid=True)
+loss_fn = monai.losses.DiceFocalLoss(sigmoid=True, lambda_focal=20.0)
 num_epochs = 100
 batch_size = 4
 mean_epoch_losses = []
@@ -226,8 +227,6 @@ torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_auto-axon-seg_{run_id}_fin
 # Plot mean epoch losses
 
 plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
-print(val_epochs)
-print(mean_val_losses)
 plt.plot(val_epochs, mean_val_losses)
 plt.legend(['Training loss', 'Validation loss'])
 plt.title('Mean epoch loss for axon segmentation')
