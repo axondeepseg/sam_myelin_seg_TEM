@@ -26,7 +26,7 @@ from utils import bids_utils
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
 derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
 checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
+device = 'cuda:3'
 preprocessed_data_path = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
 val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 # datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
@@ -62,8 +62,8 @@ sam_model.train()
 lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
-# loss_fn = monai.losses.DiceLoss(sigmoid=True)
-loss_fn = monai.losses.DiceFocalLoss(sigmoid=True, lambda_focal=20.0)
+loss_fn = monai.losses.DiceLoss(sigmoid=True)
+# loss_fn = monai.losses.DiceFocalLoss(sigmoid=True, lambda_focal=20.0)
 num_epochs = 100
 batch_size = 4
 mean_epoch_losses = []
@@ -71,7 +71,7 @@ mean_val_losses = []
 val_epochs = []
 val_frequency = 4
 prompt_with_centroids = True
-run_id='run5'
+run_id='run9'
 
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
