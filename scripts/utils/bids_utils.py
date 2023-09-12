@@ -35,13 +35,14 @@ def load_centroid_prompts(csv_paths, device):
     prompts = []
     for path in csv_paths:
         centroids = pd.read_csv(path).iloc[:, 1:3]
+        # keep track of longest prompt
         N = len(centroids) if len(centroids) > N else N
         prompts.append(torch.tensor(centroids.values))
     # create labels: actual coords = 1 for foreground point; padding = -1
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
     labels = torch.stack(labels).to(device)
-    # pad prompts and stack them in a tensor
+    # pad prompts to stack them in a tensor
     prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
 
     return prompts, labels
