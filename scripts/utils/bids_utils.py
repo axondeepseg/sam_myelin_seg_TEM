@@ -42,7 +42,7 @@ def load_centroid_prompts(csv_paths, device):
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
     labels = torch.stack(labels).to(device)
-    # pad prompts to stack them in a tensor
+    # pad prompts to stack them in a tensor of size BxNxHxW
     prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
 
     return prompts, labels
