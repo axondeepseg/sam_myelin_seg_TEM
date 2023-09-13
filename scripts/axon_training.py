@@ -71,9 +71,16 @@ mean_val_losses = []
 val_epochs = []
 val_frequency = 4
 prompt_with_centroids = True
-jitter_centroids = True
-jitter_range = 20
+jitter_centroids = False
+jitter_range = 10
+use_scheduler = True
 run_id='run10'
+
+if use_scheduler:
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer=optimizer, 
+        T_max=num_epochs, 
+        eta_min=1e-7)
 
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
@@ -156,12 +163,18 @@ for epoch in range(num_epochs):
         gt_mask_resized = gts.to(device)
         gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
             
+        optimizer.zero_grad()
+        
         loss = loss_fn(upscaled_mask, gt_binary_mask)
         loss.backward()
-        epoch_losses.append(loss.item())
         optimizer.step()
-        optimizer.zero_grad()
+
+        epoch_losses.append(loss.item())
     
+    if use_scheduler:
+        scheduler.step()
+        print('Current LR: ', scheduler.get_last_lr()[-1])
+
     # validation loop every 5 epochs to avoid cluttering
     #TODO validation loop needs to be updated
     if epoch % val_frequency == 0:
