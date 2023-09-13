@@ -72,8 +72,8 @@ val_epochs = []
 val_frequency = 4
 prompt_with_centroids = True
 jitter_centroids = True
-jitter_range = 40
-run_id='run9'
+jitter_range = 20
+run_id='run10'
 
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 train_dset = bids_utils.AxonDataset(preprocessed_data_path)
@@ -97,6 +97,7 @@ for epoch in range(num_epochs):
         
         # IMAGE ENCODER
         input_size = imgs.shape
+        # normalization and padding
         imgs = sam_model.preprocess(imgs.to(device))
         image_embedding = sam_model.image_encoder(imgs)
         

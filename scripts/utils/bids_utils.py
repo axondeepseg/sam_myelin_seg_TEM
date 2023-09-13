@@ -30,6 +30,10 @@ def load_centroid_prompts(csv_paths, device):
     Loads axon centroids from CSV derivative file to prompt SAM,
     which expects a tuple with the coordinates and their associated
     label (foreground or background point)
+
+    Returns
+        - coordinates [BxNx2]
+        - labels [BxN]
     '''
     N = 0
     prompts = []
@@ -42,7 +46,7 @@ def load_centroid_prompts(csv_paths, device):
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
     labels = torch.stack(labels).to(device)
-    # pad prompts to stack them in a tensor of size BxNxHxW
+    # pad prompts to stack them in a tensor of size BxNx2
     prompts = torch.stack([F.pad(p, pad=(0,0,0,N-p.shape[0])) for p in prompts]).to(device)
 
     return prompts, labels
@@ -144,6 +148,13 @@ class AxonDataset(Dataset):
         return len(self.file_paths)
 
     def __getitem__(self, index):
+        '''
+        Returns a tuple containing the following:
+            - image [3xHxW]
+            - gt [1xHxW]
+            - original size [1x2]
+            - filename
+        '''
         # load image and corresponding gt
         img_fname = self.file_paths[index]
         gt_fname = img_fname.name.replace('TEM.png', 'TEM_seg-axon-manual.png')
