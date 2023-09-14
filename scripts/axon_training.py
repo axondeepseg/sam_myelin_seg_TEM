@@ -22,6 +22,7 @@ from segment_anything.utils.transforms import ResizeLongestSide
 
 from utils import bids_utils
 
+torch.manual_seed(444)
 
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
 derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
@@ -64,7 +65,7 @@ wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 # loss_fn = monai.losses.DiceFocalLoss(sigmoid=True, lambda_focal=20.0)
-num_epochs = 100
+num_epochs = 60
 batch_size = 4
 mean_epoch_losses = []
 mean_val_losses = []
@@ -72,9 +73,9 @@ val_epochs = []
 val_frequency = 4
 prompt_with_centroids = True
 jitter_centroids = True
-jitter_range = 10
+jitter_range = 40
 use_scheduler = False
-run_id='run11'
+run_id='run9'
 
 if use_scheduler:
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -119,8 +120,8 @@ for epoch in range(num_epochs):
                 if jitter_centroids:
                     x_jitter = torch.randint_like(prompts[:, :, 0], low=-jitter_range, high=jitter_range)
                     y_jitter = torch.randint_like(prompts[:, :, 1], low=-jitter_range, high=jitter_range)
-                    x_jittered = torch.clamp(prompts[:, :, 0] + x_jitter, min=0, max=input_size[0]-1)
-                    y_jittered = torch.clamp(prompts[:, :, 1] + y_jitter, min=0, max=input_size[1]-1)
+                    prompts[:, :, 0] = torch.clamp(prompts[:, :, 0] + x_jitter, min=0, max=input_size[0]-1)
+                    prompts[:, :, 1] = torch.clamp(prompts[:, :, 1] + y_jitter, min=0, max=input_size[1]-1)
                 prompts = transform.apply_coords_torch(prompts, (sizes[0][0], sizes[0][1]))
                 # note: for this to work, might need to modify SAM source files;
                 # see https://github.com/facebookresearch/segment-anything/issues/365
