@@ -59,10 +59,12 @@ sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
 sam_model.train()
 
+params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
+
 # Training hyperparameters
 lr = 1e-4
 wd = 0.01
-optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
+optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 # loss_fn = monai.losses.DiceFocalLoss(sigmoid=True, lambda_focal=20.0)
 num_epochs = 60
@@ -73,7 +75,7 @@ val_epochs = []
 val_frequency = 4
 prompt_with_centroids = True
 jitter_centroids = True
-jitter_range = 40
+jitter_range = 20
 use_scheduler = False
 run_id='run9'
 
