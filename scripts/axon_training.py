@@ -73,7 +73,7 @@ val_frequency = 4
 prompt_with_centroids = True
 jitter_centroids = True
 jitter_range = 10
-use_scheduler = True
+use_scheduler = False
 run_id='run11'
 
 if use_scheduler:
@@ -109,40 +109,41 @@ for epoch in range(num_epochs):
         image_embedding = sam_model.image_encoder(imgs)
         
         # PROMPT ENCODER
-        if prompt_with_centroids:
-            # infer the path to the CSV file containing the list of axon centroids
-            names = [Path(n).name for n in names]
-            prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
-            prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
-            prompts, labels = bids_utils.load_centroid_prompts(prompt_paths, device)
-            if jitter_centroids:
-                x_jitter = torch.randint_like(prompts[:, :, 0], low=-jitter_range, high=jitter_range)
-                y_jitter = torch.randint_like(prompts[:, :, 1], low=-jitter_range, high=jitter_range)
-                x_jittered = torch.clamp(prompts[:, :, 0] + x_jitter, min=0, max=input_size[0]-1)
-                y_jittered = torch.clamp(prompts[:, :, 1] + y_jitter, min=0, max=input_size[1]-1)
-            prompts = transform.apply_coords_torch(prompts, (sizes[0][0], sizes[0][1]))
-            # note: for this to work, might need to modify SAM source files;
-            # see https://github.com/facebookresearch/segment-anything/issues/365
-            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                points=(prompts, labels),
-                boxes=None,
-                masks=None,
-            )
-        else:
-            # use full bbox
-            H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
-            boxes = torch.stack([
-                torch.zeros_like(H),
-                torch.zeros_like(H),
-                W-1,
-                H-1
-            ]).t()[None, :]
-            box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
-            sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
-                points=None,
-                boxes=box_torch,
-                masks=None,
-            )
+        with torch.no_grad():
+            if prompt_with_centroids:
+                # infer the path to the CSV file containing the list of axon centroids
+                names = [Path(n).name for n in names]
+                prompt_paths = [maps_path / n.split('_')[0] / 'micr' / n for n in names]
+                prompt_paths = [str(p).replace('_TEM.png', '_prompts.csv') for p in prompt_paths]
+                prompts, labels = bids_utils.load_centroid_prompts(prompt_paths, device)
+                if jitter_centroids:
+                    x_jitter = torch.randint_like(prompts[:, :, 0], low=-jitter_range, high=jitter_range)
+                    y_jitter = torch.randint_like(prompts[:, :, 1], low=-jitter_range, high=jitter_range)
+                    x_jittered = torch.clamp(prompts[:, :, 0] + x_jitter, min=0, max=input_size[0]-1)
+                    y_jittered = torch.clamp(prompts[:, :, 1] + y_jitter, min=0, max=input_size[1]-1)
+                prompts = transform.apply_coords_torch(prompts, (sizes[0][0], sizes[0][1]))
+                # note: for this to work, might need to modify SAM source files;
+                # see https://github.com/facebookresearch/segment-anything/issues/365
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=(prompts, labels),
+                    boxes=None,
+                    masks=None,
+                )
+            else:
+                # use full bbox
+                H, W = torch.tensor(input_size[-2]), torch.tensor(input_size[-1])
+                boxes = torch.stack([
+                    torch.zeros_like(H),
+                    torch.zeros_like(H),
+                    W-1,
+                    H-1
+                ]).t()[None, :]
+                box_torch = torch.as_tensor(boxes, dtype=torch.float, device=device)
+                sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
+                    points=None,
+                    boxes=box_torch,
+                    masks=None,
+                )
 
         # MASK DECODER
         low_res_mask, _, = sam_model.mask_decoder(
