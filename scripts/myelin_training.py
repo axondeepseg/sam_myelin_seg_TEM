@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import torch
+from torch.nn.functional import threshold, normalize
 import pandas as pd
 from collections import defaultdict
 from tqdm import tqdm
@@ -125,32 +126,35 @@ def segment_image(sam_model, bboxes, emb_dict, device):
             full_mask = binary_mask
         else:
             full_mask += binary_mask
-    
+
+        # TODO binarize final mask (overlapping regions end up with values >1)    
     return full_mask
 
 # Training hyperparameters
-
 lr = 1e-6
 wd = 0.01
 optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
-
-
-# Training loop
-
-from torch.nn.functional import threshold, normalize
-
 num_epochs = 100
-batch_size = 10
+val_frequency = 4
+batch_size = 1
+prompt_batch_size = 10
 mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
+run_id = 'run1'
 
+#TODO: deprecate bids_dataloader and implement something like AxonDataset class for myelin
 train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
 # keep only 1 image for validation
 val_list = [IVADOMED_VALIDATION_SUBJECTS[0]]
 
+best_val_loss = 1000
+best_val_epoch = -1
+
 for epoch in range(num_epochs):
     epoch_losses = []
+    val_losses = []
+
     train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
     val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
@@ -202,27 +206,28 @@ for epoch in range(num_epochs):
             
             loss = loss_fn(upscaled_mask, gt_binary_mask)
             loss.backward()
-            epoch_losses.append(loss.item())
             pbar.set_description(f'Loss: {loss.item()}')
+            epoch_losses.append(loss.item())
         # step the optimizer
         optimizer.step()
         optimizer.zero_grad()
         pbar.update(1)
     
     # validation loop every 5 epochs to avoid cluttering
-    if epoch % 5 == 0:
+    if epoch % val_frequency == 0:
         for sample in val_dataloader:
             emb_path, bboxes, myelin_map = sample
             emb_dict = load_image_embedding(emb_path)
             mask = segment_image(sam_model, bboxes, emb_dict, device)
-            fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
-            plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
+            #TODO: compute loss and save best model
+            # fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
+            # plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
+    # if epoch % 10 == 0:
+    #     torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
-    if epoch % 10 == 0:
-        torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
-torch.save(sam_model.state_dict(), '../../scripts/sam_vit_b_01ec64_finetuned_diceloss.pth')
+torch.save(sam_model.state_dict(), f'../../scripts/sam_vit_b_01ec64_auto-myelin-seg_{run_id}_final.pth')
 
 # Plot mean epoch losses
 
