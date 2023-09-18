@@ -30,13 +30,17 @@ IVADOMED_VALIDATION_SUBJECTS = [
 ]
 IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
 
+torch.manual_seed(444)
 
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
 derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-embeddings_path = derivatives_path / 'embeddings'
-maps_path = derivatives_path / 'maps'
+model_type = 'vit_b'
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
 
 data_dict = bids_utils.index_bids_dataset(datapath)
+embeddings_path = derivatives_path / 'embeddings'
+maps_path = derivatives_path / 'maps'
 
 
 # some utility functions to read prompts and labels
@@ -70,11 +74,6 @@ def show_box(box, ax):
 
 
 # Load the initial model checkpoint
-
-model_type = 'vit_b'
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
-
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
 sam_model.train();
