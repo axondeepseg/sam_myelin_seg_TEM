@@ -43,6 +43,7 @@ def load_centroid_prompts(csv_paths, device):
         N = len(centroids) if len(centroids) > N else N
         prompts.append(torch.tensor(centroids.values))
     # create labels: actual coords = 1 for foreground point; padding = -1
+    # see https://github.com/facebookresearch/segment-anything/issues/394
     labels = [torch.ones_like(p[:,0]) for p in prompts]
     labels = [F.pad(l, pad=(0,N-l.shape[0]), value=-1) for l in labels]
     labels = torch.stack(labels).to(device)

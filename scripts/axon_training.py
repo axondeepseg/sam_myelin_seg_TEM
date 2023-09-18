@@ -77,7 +77,7 @@ prompt_with_centroids = True
 jitter_centroids = True
 jitter_range = 20
 use_scheduler = False
-run_id='run9'
+run_id = 'run9'
 
 if use_scheduler:
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
