@@ -158,7 +158,7 @@ for epoch in range(num_epochs):
     train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
     val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
-    pbar = tqdm(total=145)
+    sam_model.train()
     for sample in train_dataloader:
         emb_path, bboxes, myelin_map = sample
         emb_dict = load_image_embedding(emb_path)
@@ -215,13 +215,15 @@ for epoch in range(num_epochs):
     
     # validation loop every 5 epochs to avoid cluttering
     if epoch % val_frequency == 0:
-        for sample in val_dataloader:
-            emb_path, bboxes, myelin_map = sample
-            emb_dict = load_image_embedding(emb_path)
-            mask = segment_image(sam_model, bboxes, emb_dict, device)
-            #TODO: compute loss and save best model
-            # fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
-            # plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
+        sam_model.eval()
+        with torch.no_grad():
+            for sample in val_dataloader:
+                emb_path, bboxes, myelin_map = sample
+                emb_dict = load_image_embedding(emb_path)
+                mask = segment_image(sam_model, bboxes, emb_dict, device)
+                #TODO: compute loss and save best model
+                # fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
+                # plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
 
     # if epoch % 10 == 0:
     #     torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
