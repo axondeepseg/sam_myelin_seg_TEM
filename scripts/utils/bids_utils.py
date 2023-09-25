@@ -192,8 +192,10 @@ class MyelinDataset(Dataset):
         │  ├─ img2.png
         │  ├─ ...
         ├─ gts-my/
-        │  ├─ img1_seg-myelin-manual.png
-        │  ├─ img2_seg-myelin-manual.png
+        │  ├─ img1_myelinmap.png
+        │  ├─ img1_prompts.csv
+        │  ├─ img2_myelinmap.png
+        │  ├─ img2_prompts.csv
         │  ├─ ...
         '''
         self.data_root = Path(data_root)
@@ -211,7 +213,7 @@ class MyelinDataset(Dataset):
         '''
         Returns a tuple containing the following:
             - image [3xHxW]
-            - gt [1xHxW] (instance segmentation)
+            - gt [1xHxW] (instance segmentation with N objects)
             - prompts [Nx4] (bounding boxes)
             - original size [1x2]
             - filename
@@ -219,22 +221,29 @@ class MyelinDataset(Dataset):
         # load image and corresponding gt
         img_fname = self.file_paths[index]
         gt_fname = img_fname.name.replace('TEM.png', 'myelinmap.png')
+        prompt_fname = img_fname.name.replace('TEM.png', 'prompts.csv')
+
         gt_fname = self.gt_path / gt_fname
         img = cv2.imread(str(img_fname), cv2.IMREAD_GRAYSCALE)
         gt = cv2.imread(str(gt_fname), cv2.IMREAD_GRAYSCALE)
         # assert img and gt initially have same dimensions
         assert img.shape == gt.shape, "image and ground truth should have the same size"
+        prompts = pd.read_csv(prompt_fname)
+        cols_bboxes = ['bbox_min_x', 'bbox_min_y', 'bbox_max_x', 'bbox_max_y']
+        prompts = prompts[cols_bboxes]
         original_size = img.shape
-        #TODO: load prompt
         # NOTE: we only resize the image; GT is kept at original size
-        #TODO: apply transform to prompts
         img_1024 = self.transform.apply_image(img)
+        # apply transform to prompts
+        prompts_1024 = self.transform.apply_boxes(prompts, original_size)
+        prompts_1024 = torch.as_tensor(prompts_1024, dtype=torch.float)
         # convert shape to channel-first (in our case expand first dim to 3 channels)
         img_1024 = np.broadcast_to(img_1024, (3, img_1024.shape[0], img_1024.shape[1]))
         gt = gt[None, :, :]
         return (
             torch.tensor(img_1024).float(),
             torch.tensor(gt).long(),
+            torch.tensor(prompts_1024),
             torch.tensor(original_size),
             str(img_fname)
         )
