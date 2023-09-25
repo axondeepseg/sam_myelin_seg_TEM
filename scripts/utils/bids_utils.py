@@ -101,22 +101,24 @@ def index_bids_dataset(datapath):
 
 # data loader providing the myelin map (masks), the bboxes (prompts) 
 # and the path to the pre-computed image embeddings
-def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
-    '''
-    :param data_dict:       contains img, mask and px_size info per sample per subject
-    :param maps_path:       paths to myelin maps (instance masks)
-    :param embeddings_path  paths to pre-computed image embeddings
-    :param sub_list         subjects included
-    '''
-    subjects = list(data_dict.keys())
-    for sub in subjects:
-        if sub in sub_list:
-            samples = (s for s in data_dict[sub].keys() if 'sample' in s)
-            for sample in samples:
-                emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
-                bboxes = get_sample_bboxes(sub, sample, maps_path)
-                myelin_map = get_myelin_map(sub, sample, maps_path)
-                yield (emb_path, bboxes, myelin_map)
+#TODO: delete this deprecated function
+
+# def bids_dataloader(data_dict, maps_path, embeddings_path, sub_list):
+#     '''
+#     :param data_dict:       contains img, mask and px_size info per sample per subject
+#     :param maps_path:       paths to myelin maps (instance masks)
+#     :param embeddings_path  paths to pre-computed image embeddings
+#     :param sub_list         subjects included
+#     '''
+#     subjects = list(data_dict.keys())
+#     for sub in subjects:
+#         if sub in sub_list:
+#             samples = (s for s in data_dict[sub].keys() if 'sample' in s)
+#             for sample in samples:
+#                 emb_path = embeddings_path / sub / 'micr' / f'{sub}_{sample}_TEM_embedding.pt'
+#                 bboxes = get_sample_bboxes(sub, sample, maps_path)
+#                 myelin_map = get_myelin_map(sub, sample, maps_path)
+#                 yield (emb_path, bboxes, myelin_map)
 
 class AxonDataset(Dataset):
     '''Dataset class for axon training
@@ -243,7 +245,7 @@ class MyelinDataset(Dataset):
         return (
             torch.tensor(img_1024).float(),
             torch.tensor(gt).long(),
-            torch.tensor(prompts_1024),
+            prompts_1024,
             torch.tensor(original_size),
             str(img_fname)
         )

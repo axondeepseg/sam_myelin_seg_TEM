@@ -20,17 +20,6 @@ import bids_utils
 from segment_anything import SamPredictor, sam_model_registry
 from segment_anything.utils.transforms import ResizeLongestSide
 
-
-IVADOMED_TRAINING_SUBJECTS = [
-    'sub-nyuMouse07', 'sub-nyuMouse09', 'sub-nyuMouse11', 'sub-nyuMouse12', 'sub-nyuMouse14',
-    'sub-nyuMouse15', 'sub-nyuMouse27', 'sub-nyuMouse28', 'sub-nyuMouse30', 'sub-nyuMouse31',
-    'sub-nyuMouse32', 'sub-nyuMouse33', 'sub-nyuMouse35', 'sub-nyuMouse36'
-]
-IVADOMED_VALIDATION_SUBJECTS = [
-    'sub-nyuMouse10', 'sub-nyuMouse13', 'sub-nyuMouse25', 'sub-nyuMouse29', 'sub-nyuMouse34'    
-]
-IVADOMED_TEST_SUBJECTS = ['sub-nyuMouse26']
-
 torch.manual_seed(444)
 
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
@@ -45,18 +34,8 @@ maps_path = derivatives_path / 'maps'
 
 
 # some utility functions to read prompts and labels
-
-def get_sample_bboxes(subject, sample, maps_path):
-    prompts_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_prompts.csv'
-    prompts_df = pd.read_csv(prompts_fname)
-    return prompts_df[['bbox_min_x', 'bbox_min_y', 'bbox_max_x', 'bbox_max_y']]
-
 def get_myelin_bbox(bbox_df, axon_id):
     return np.array(bbox_df.iloc[axon_id])
-
-def get_myelin_map(subject, sample, maps_path):
-    map_fname = maps_path / subject / 'micr' / f'{subject}_{sample}_myelinmap.png'
-    return cv2.imread(str(map_fname))
     
 def get_myelin_mask(myelin_map, axon_id):
     return 255 * (myelin_map == axon_id + 1)
