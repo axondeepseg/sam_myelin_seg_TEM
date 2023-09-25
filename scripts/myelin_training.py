@@ -24,6 +24,8 @@ torch.manual_seed(444)
 
 datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
 derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 model_type = 'vit_b'
 checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
 device = 'cuda:0'
@@ -122,10 +124,15 @@ mean_epoch_losses = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 run_id = 'run1'
 
-#TODO: deprecate bids_dataloader and implement something like AxonDataset class for myelin
-train_list = IVADOMED_TRAINING_SUBJECTS + IVADOMED_VALIDATION_SUBJECTS[1:]
-# keep only 1 image for validation
-val_list = [IVADOMED_VALIDATION_SUBJECTS[0]]
+# loaders
+train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
+val_dset = bids_utils.MyelinDataset(val_preprocessed_datapath)
+train_dataloader = DataLoader(
+    train_dset,
+    batch_size=batch_size,
+    shuffle=True,
+)
+val_loader = DataLoader(val_dset, batch_size=1)
 
 best_val_loss = 1000
 best_val_epoch = -1
@@ -133,18 +140,11 @@ best_val_epoch = -1
 for epoch in range(num_epochs):
     epoch_losses = []
     val_losses = []
-
-    train_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, train_list)
-    val_dataloader = bids_utils.bids_dataloader(data_dict, maps_path, embeddings_path, val_list)
     
     sam_model.train()
-    for sample in train_dataloader:
-        emb_path, bboxes, myelin_map = sample
-        emb_dict = load_image_embedding(emb_path)
+    for (imgs, gts, prompts, sizes, names) in train_dataloader:
 
-        original_size = emb_dict['original_size']
-        input_size = emb_dict['input_size']
-        image_embedding = emb_dict['features']
+        # IMG ENCODER        
         
         # train on every axon in the image
         for axon_id in range(len(bboxes)):
