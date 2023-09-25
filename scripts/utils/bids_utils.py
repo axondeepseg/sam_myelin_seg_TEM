@@ -176,3 +176,65 @@ class AxonDataset(Dataset):
             torch.tensor(original_size),
             str(img_fname)
         )
+
+class MyelinDataset(Dataset):
+    '''Dataset class for myelin training
+    This will return a resized image and an unresized ground truth. After 
+    inference, the mask can be resized with sam_model.postprocess_masks given
+    the original image size so that it matches the GT shape.
+    '''
+    def __init__(self, data_root):
+        '''
+        Expected data structure
+        data_root/
+        ├─ imgs/
+        │  ├─ img1.png
+        │  ├─ img2.png
+        │  ├─ ...
+        ├─ gts-my/
+        │  ├─ img1_seg-myelin-manual.png
+        │  ├─ img2_seg-myelin-manual.png
+        │  ├─ ...
+        '''
+        self.data_root = Path(data_root)
+        self.img_path = self.data_root / 'imgs'
+        self.gt_path = self.data_root / 'gts-my'
+        self.file_paths = sorted(list(self.img_path.glob("*.png")))
+
+        self.transform = ResizeLongestSide(1024)
+        print(f"number of images: {len(self.file_paths)}")
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, index):
+        '''
+        Returns a tuple containing the following:
+            - image [3xHxW]
+            - gt [1xHxW] (instance segmentation)
+            - prompts [Nx4] (bounding boxes)
+            - original size [1x2]
+            - filename
+        '''
+        # load image and corresponding gt
+        img_fname = self.file_paths[index]
+        gt_fname = img_fname.name.replace('TEM.png', 'myelinmap.png')
+        gt_fname = self.gt_path / gt_fname
+        img = cv2.imread(str(img_fname), cv2.IMREAD_GRAYSCALE)
+        gt = cv2.imread(str(gt_fname), cv2.IMREAD_GRAYSCALE)
+        # assert img and gt initially have same dimensions
+        assert img.shape == gt.shape, "image and ground truth should have the same size"
+        original_size = img.shape
+        #TODO: load prompt
+        # NOTE: we only resize the image; GT is kept at original size
+        #TODO: apply transform to prompts
+        img_1024 = self.transform.apply_image(img)
+        # convert shape to channel-first (in our case expand first dim to 3 channels)
+        img_1024 = np.broadcast_to(img_1024, (3, img_1024.shape[0], img_1024.shape[1]))
+        gt = gt[None, :, :]
+        return (
+            torch.tensor(img_1024).float(),
+            torch.tensor(gt).long(),
+            torch.tensor(original_size),
+            str(img_fname)
+        )
