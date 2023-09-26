@@ -46,6 +46,8 @@ def get_myelin_mask(myelin_map, axon_id):
 # Load the initial model checkpoint
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
+params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
+
 
 # utility function to segment the whole image without the SamPredictor class
 # TODO: RE-WRITE THIS
@@ -98,7 +100,7 @@ def segment_image(sam_model, bboxes, emb_dict, device):
 # Training hyperparameters
 lr = 1e-6
 wd = 0.01
-optimizer = torch.optim.AdamW(sam_model.mask_decoder.parameters(), lr=lr, weight_decay=wd)
+optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 num_epochs = 100
 val_frequency = 4
@@ -111,6 +113,7 @@ run_id = 'run1'
 # loaders
 train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
 val_dset = bids_utils.MyelinDataset(val_preprocessed_datapath)
+
 train_dataloader = DataLoader(
     train_dset,
     batch_size=batch_size,
@@ -128,8 +131,18 @@ for epoch in range(num_epochs):
     sam_model.train()
     for (imgs, gts, prompts, sizes, names) in train_dataloader:
 
-        # IMG ENCODER        
+        # IMG ENCODER
+        input_size = imgs.shape
+        imgs = sam_model.preprocess(imgs.to(device))
+        image_embedding = sam_model.image_encoder(imgs)
         
+        # batch and shuffle prompts
+        batched_prompts = DataLoader(
+            bids_utils.PromptSet(prompts),
+            batch_size=prompt_batch_size,
+            shuffle=True
+        )
+
         # train on every axon in the image
         for axon_id in range(len(bboxes)):
             # get mask and bbox prompt
