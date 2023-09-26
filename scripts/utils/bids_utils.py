@@ -179,6 +179,24 @@ class AxonDataset(Dataset):
             str(img_fname)
         )
 
+class PromptSet(Dataset):
+    '''Dataset class for bounding box prompts
+    This will return a single bounding box prompt along with its associated
+    axon ID.
+    '''
+    def __init__(self, prompts):
+        '''
+        Expects an [Nx5] tensor where N is the number of axons in the image.
+        We assume the Resize transform is already applied.
+        '''
+        self.prompts = prompts
+
+    def __len__(self):
+        return self.prompts.shape[0]
+
+    def __getitem__(self, index):
+        return self.prompts[index]
+
 class MyelinDataset(Dataset):
     '''Dataset class for myelin training
     This will return a resized image and an unresized ground truth. After 
@@ -216,9 +234,16 @@ class MyelinDataset(Dataset):
         Returns a tuple containing the following:
             - image [3xHxW]
             - gt [1xHxW] (instance segmentation with N objects)
-            - prompts [Nx4] (bounding boxes)
+            - prompts [Nx5] (bounding boxes, see format below)
             - original size [1x2]
             - filename
+
+        prompt format:
+        | AXON_ID | MIN_X | MIN_Y | MAX_X | MAX_Y |
+        |---------|-------|-------|-------|-------|
+        |    0    |  ...  |  ...  |  ...  |  ...  |
+        |   ...   |  ...  |  ...  |  ...  |  ...  |
+        |   N-1   |  ...  |  ...  |  ...  |  ...  |
         '''
         # load image and corresponding gt
         img_fname = self.file_paths[index]
