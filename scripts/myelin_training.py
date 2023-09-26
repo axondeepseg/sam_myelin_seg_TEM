@@ -42,29 +42,13 @@ def get_myelin_bbox(bbox_df, axon_id):
 def get_myelin_mask(myelin_map, axon_id):
     return 255 * (myelin_map == axon_id + 1)
 
-# helper functions to display masks/bboxes
-def show_mask(mask, ax):
-    color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-    
-def show_box(box, ax):
-    x0, y0 = box[0], box[1]
-    w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))  
-
 
 # Load the initial model checkpoint
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
-sam_model.train();
-
-def load_image_embedding(path):
-    emb_dict = torch.load(path, device)
-    return emb_dict
 
 # utility function to segment the whole image without the SamPredictor class
+# TODO: RE-WRITE THIS
 def segment_image(sam_model, bboxes, emb_dict, device):
     
     original_size = emb_dict['original_size']
