@@ -256,15 +256,13 @@ class MyelinDataset(Dataset):
         # assert img and gt initially have same dimensions
         assert img.shape == gt.shape, "image and ground truth should have the same size"
         prompts = pd.read_csv(self.gt_path / prompt_fname)
-        cols_bboxes = ['bbox_min_x', 'bbox_min_y', 'bbox_max_x', 'bbox_max_y']
-        prompts = torch.tensor(prompts[cols_bboxes].values)
+        prompts = torch.tensor(prompts.drop(columns=['x0', 'y0']).values)
         original_size = img.shape
         # NOTE: we only resize the image; GT is kept at original size
         img_1024 = self.transform.apply_image(img)
         # apply transform to prompts
-        prompts_1024 = self.transform.apply_boxes_torch(prompts, original_size)
-        print(prompts_1024.shape)
-        prompts_1024 = torch.as_tensor(prompts_1024, dtype=torch.float)
+        prompts[:,1:] = self.transform.apply_boxes_torch(prompts[:,1:], original_size)
+        prompts_1024 = torch.as_tensor(prompts, dtype=torch.float)
         # convert shape to channel-first (in our case expand first dim to 3 channels)
         img_1024 = np.broadcast_to(img_1024, (3, img_1024.shape[0], img_1024.shape[1]))
         gt = gt[None, :, :]
