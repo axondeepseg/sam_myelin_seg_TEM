@@ -162,8 +162,7 @@ for epoch in range(num_epochs):
             original_size=(sizes[0][0], sizes[0][1]),
         ).to(device)
 
-        gt_mask_resized = gts.to(device)
-        gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
+        gt_binary_mask = torch.as_tensor(gts.to(device) > 0, dtype=torch.float32)
             
         optimizer.zero_grad()
         

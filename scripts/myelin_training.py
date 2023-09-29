@@ -183,21 +183,19 @@ for epoch in range(num_epochs):
             )
             upscaled_mask = sam_model.postprocess_masks(
                 low_res_mask,
-                input_size,
-                original_size,
+                input_size=input_size,
+                original_size=(sizes[0][0], sizes[0][1]),
             ).to(device)
             
-            gt_mask_resized = torch.from_numpy(gt_mask[:,:,0]).unsqueeze(0).unsqueeze(0).to(device)
-            gt_binary_mask = torch.as_tensor(gt_mask_resized > 0, dtype=torch.float32)
+            gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
             
+            optimizer.zero_grad()
+
             loss = loss_fn(upscaled_mask, gt_binary_mask)
             loss.backward()
-            pbar.set_description(f'Loss: {loss.item()}')
+            optimizer.step()
+            
             epoch_losses.append(loss.item())
-        # step the optimizer
-        optimizer.step()
-        optimizer.zero_grad()
-        pbar.update(1)
     
     # validation loop every 5 epochs to avoid cluttering
     if epoch % val_frequency == 0:
