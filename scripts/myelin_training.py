@@ -143,7 +143,7 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        image_embedding = sam_model.image_encoder(imgs)
+        # image_embedding = sam_model.image_encoder(imgs)
         
         # batch and shuffle prompts
         prompt_loader = DataLoader(
@@ -151,10 +151,13 @@ for epoch in range(num_epochs):
             batch_size=prompt_batch_size,
             shuffle=True
         )
-
+        print(names)
         # train on every axon in the image
-        for axon_id in range(len(bboxes)):
+        for axon_ids, prompts in prompt_loader:
             # get mask and bbox prompt
+            print(axon_ids)
+            print(prompts)
+            continue
             prompt = get_myelin_bbox(bboxes, axon_id)
             gt_mask = get_myelin_mask(myelin_map, axon_id)
 

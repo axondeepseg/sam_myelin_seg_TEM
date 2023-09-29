@@ -195,7 +195,11 @@ class PromptSet(Dataset):
         return self.prompts.shape[0]
 
     def __getitem__(self, index):
-        return self.prompts[index]
+        '''
+        Returns a tuple of shape (1, 4) containing the axon id and its
+        associated bounding box.
+        '''
+        return self.prompts[index, 0], self.prompts[index, 1:]
 
 class MyelinDataset(Dataset):
     '''Dataset class for myelin training
