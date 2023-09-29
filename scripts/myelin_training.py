@@ -143,7 +143,7 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        # image_embedding = sam_model.image_encoder(imgs)
+        image_embedding = sam_model.image_encoder(imgs)
         
         # batch and shuffle prompts
         prompt_loader = DataLoader(
@@ -151,28 +151,26 @@ for epoch in range(num_epochs):
             batch_size=prompt_batch_size,
             shuffle=True
         )
-        print(names)
         # train on every axon in the image
         for axon_ids, prompts in prompt_loader:
-            # get mask and bbox prompt
-            print(axon_ids)
-            print(prompts)
-            continue
-            prompt = get_myelin_bbox(bboxes, axon_id)
-            gt_mask = get_myelin_mask(myelin_map, axon_id)
+            # build mask by summing individual masks at train-time
+            # this mask will contain prompt_batch_size myelin sheaths
+            labels = torch.zeros_like(gts)
+            for b in range(batch_size):
+                mask = gts[b]
+                individual_masks = [get_myelin_mask(mask, a_id) for a_id in axon_ids]
+                individual_masks = torch.stack(individual_masks)
+                labels[b] = torch.sum(individual_masks, dim=0)
 
             # empty masks should not be processed
-            if np.isnan(prompt).any():
+            if np.isnan(prompts).any():
                 continue
+            
             # no grad for the prompt encoder
             with torch.no_grad():
-                box = transform.apply_boxes(prompt, original_size)
-                box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
-                box_torch = box_torch[None, :]
-                
                 sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                     points=None,
-                    boxes=box_torch,
+                    boxes=prompts.to(device),
                     masks=None,
                 )
             # now we pass the image and prompt embeddings in the mask decoder
@@ -203,21 +201,25 @@ for epoch in range(num_epochs):
     
     # validation loop every 5 epochs to avoid cluttering
     if epoch % val_frequency == 0:
+        mean_val_loss = 0
+
         sam_model.eval()
         with torch.no_grad():
-            for sample in val_dataloader:
-                emb_path, bboxes, myelin_map = sample
-                emb_dict = load_image_embedding(emb_path)
-                mask = segment_image(sam_model, bboxes, emb_dict, device)
-                #TODO: compute loss and save best model
-                # fname = emb_path.stem.replace('embedding', f'val-seg-epoch{epoch}.png')
-                # plt.imsave(Path('validation_results') / fname, mask.cpu().detach().numpy().squeeze(), cmap='gray')
+            #TODO: VALIDATION LOOP (could use segment_image fn)
+            pass
+            # for sample in val_dataloader:
+            #     emb_path, bboxes, myelin_map = sample
+            #     emb_dict = load_image_embedding(emb_path)
+            #     mask = segment_image(sam_model, bboxes, emb_dict, device)
 
-    # if epoch % 10 == 0:
-    #     torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_epoch_{epoch}_diceloss.pth')
+        if mean_val_loss < best_val_loss:
+            print("\tSaving best model.")
+            best_val_loss = mean_val_loss
+            best_val_epoch = epoch
+            torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_myelin-seg_{run_id}_best.pth')
     mean_epoch_losses.append(np.mean(epoch_losses))
     print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
-torch.save(sam_model.state_dict(), f'../../scripts/sam_vit_b_01ec64_auto-myelin-seg_{run_id}_final.pth')
+torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_myelin-seg_{run_id}_final.pth')
 
 # Plot mean epoch losses
 
