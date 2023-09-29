@@ -59,8 +59,7 @@ params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decode
 
 
 # utility function to segment the whole image without the SamPredictor class
-# TODO: RE-WRITE THIS
-def segment_image(sam_model, imgs, prompts, device):
+def segment_image(sam_model, imgs, prompts, original_size, device):
     
     full_mask = None
     
@@ -69,14 +68,13 @@ def segment_image(sam_model, imgs, prompts, device):
     image_embedding = sam_model.image_encoder(imgs)
     
     prompts = bids_utils.PromptSet(prompts.squeeze())
-    prompt_loader = DataLoader(prompts, batch_size=prompt_batch_size)
+    prompt_loader = DataLoader(prompts, batch_size=10)
     
-    for axon_id, bboxes in prompt_loader:
-        if np.isnan(prompt).any():
+    for _, bboxes in prompt_loader:
+        if np.isnan(bboxes).any():
                 continue
         
         with torch.no_grad():
-            
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                 points=None,
                 boxes=bboxes.to(device),
@@ -96,14 +94,12 @@ def segment_image(sam_model, imgs, prompts, device):
                 input_size,
                 original_size,
             ).to(device)
-            binary_mask = normalize(threshold(mask, 0.0, 0))
+            combined_mask = torch.sum(mask, dim=0)
 
         if full_mask is None:
-            full_mask = binary_mask
+            full_mask = combined_mask
         else:
-            full_mask += binary_mask
-
-        # TODO binarize final mask (overlapping regions end up with values >1)    
+            full_mask += combined_mask
     return full_mask
 
 # Training hyperparameters
@@ -123,7 +119,7 @@ run_id = 'run1'
 train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
 val_dset = bids_utils.MyelinDataset(val_preprocessed_datapath)
 
-train_dataloader = DataLoader(
+train_loader = DataLoader(
     train_dset,
     batch_size=batch_size,
     shuffle=True,
@@ -138,8 +134,8 @@ for epoch in range(num_epochs):
     val_losses = []
     
     sam_model.train()
-    for (imgs, gts, prompts, sizes, names) in train_dataloader:
-
+    for (imgs, gts, prompts, sizes, names) in train_loader:
+        break
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
@@ -203,9 +199,9 @@ for epoch in range(num_epochs):
         sam_model.eval()
         with torch.no_grad():
             #TODO: VALIDATION LOOP (could use segment_image fn)
-            pass
-            # for sample in val_dataloader:
-            #     emb_path, bboxes, myelin_map = sample
+            for v_imgs, v_gts, v_prompts, v_sizes, _ in val_loader:
+                v_sizes = (v_sizes[0][0], v_sizes[0][1])
+                mask = segment_image(sam_model, v_imgs, v_prompts, v_sizes, device)
             #     emb_dict = load_image_embedding(emb_path)
             #     mask = segment_image(sam_model, bboxes, emb_dict, device)
 

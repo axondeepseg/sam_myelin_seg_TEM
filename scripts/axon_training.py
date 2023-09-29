@@ -177,7 +177,6 @@ for epoch in range(num_epochs):
         print('Current LR: ', scheduler.get_last_lr()[-1])
 
     # validation loop every 5 epochs to avoid cluttering
-    #TODO validation loop needs to be updated
     if epoch % val_frequency == 0:
         sam_model.eval()
         val_epochs.append(epoch)
