@@ -100,7 +100,7 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
             full_mask = combined_mask
         else:
             full_mask += combined_mask
-    return full_mask
+    return full_mask[None, :]
 
 # Training hyperparameters
 lr = 1e-6
@@ -112,6 +112,8 @@ val_frequency = 4
 batch_size = 1
 prompt_batch_size = 10
 mean_epoch_losses = []
+mean_val_losses = []
+val_epochs = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 run_id = 'run1'
 
@@ -192,18 +194,23 @@ for epoch in range(num_epochs):
             
             epoch_losses.append(loss.item())
     
-    # validation loop every 5 epochs to avoid cluttering
+    # validation loop
     if epoch % val_frequency == 0:
         mean_val_loss = 0
+        val_epochs.append(epoch)
 
         sam_model.eval()
         with torch.no_grad():
-            #TODO: VALIDATION LOOP (could use segment_image fn)
             for v_imgs, v_gts, v_prompts, v_sizes, _ in val_loader:
                 v_sizes = (v_sizes[0][0], v_sizes[0][1])
                 mask = segment_image(sam_model, v_imgs, v_prompts, v_sizes, device)
-            #     emb_dict = load_image_embedding(emb_path)
-            #     mask = segment_image(sam_model, bboxes, emb_dict, device)
+                gt_binary_mask = torch.as_tensor(v_gts > 0, dtype=torch.float32)
+                v_loss = loss_fn(mask, gt_binary_mask)
+                val_losses.append(v_loss.item())
+        mean_val_loss = np.mean(val_losses)
+
+        mean_val_losses.append(mean_val_loss)
+        print(f'EPOCH {epoch}\n\tMEAN VAL LOSS: {mean_val_losses[-1]}')
 
         if mean_val_loss < best_val_loss:
             print("\tSaving best model.")
@@ -217,7 +224,9 @@ torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_myelin-seg_{run_id}_final.
 # Plot mean epoch losses
 
 plt.plot(list(range(len(mean_epoch_losses))), mean_epoch_losses)
-plt.title('Mean epoch loss')
+plt.plot(val_epochs, mean_val_losses)
+plt.legend(['Training loss', 'Validation loss'])
+plt.title('Mean epoch loss for myelin segmentation')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
