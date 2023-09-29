@@ -60,26 +60,26 @@ params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decode
 
 # utility function to segment the whole image without the SamPredictor class
 # TODO: RE-WRITE THIS
-def segment_image(sam_model, bboxes, emb_dict, device):
+def segment_image(sam_model, imgs, prompts, device):
     
-    original_size = emb_dict['original_size']
-    input_size = emb_dict['input_size']
-    image_embedding = emb_dict['features']
     full_mask = None
-
-    for axon_id in range(len(bboxes)):
-        prompt = get_myelin_bbox(bboxes, axon_id)
+    
+    input_size = imgs.shape
+    imgs = sam_model.preprocess(imgs.to(device))
+    image_embedding = sam_model.image_encoder(imgs)
+    
+    prompts = bids_utils.PromptSet(prompts.squeeze())
+    prompt_loader = DataLoader(prompts, batch_size=prompt_batch_size)
+    
+    for axon_id, bboxes in prompt_loader:
         if np.isnan(prompt).any():
                 continue
         
         with torch.no_grad():
-            box = transform.apply_boxes(prompt, original_size)
-            box_torch = torch.as_tensor(box, dtype=torch.float, device=device)
-            box_torch = box_torch[None, :]
-
+            
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                 points=None,
-                boxes=box_torch,
+                boxes=bboxes.to(device),
                 masks=None,
             )
             
@@ -190,7 +190,6 @@ for epoch in range(num_epochs):
             gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
             
             optimizer.zero_grad()
-
             loss = loss_fn(upscaled_mask, gt_binary_mask)
             loss.backward()
             optimizer.step()
@@ -226,4 +225,4 @@ plt.title('Mean epoch loss')
 plt.xlabel('Epoch Number')
 plt.ylabel('Loss')
 
-plt.savefig('losses_with_diceloss.png')
+plt.savefig(f'losses_myelin_seg_vit_b_{run_id}.png')
