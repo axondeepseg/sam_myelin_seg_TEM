@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import torch
+from torch.autograd import Variable as V
 from torch.utils.data import DataLoader
 from torch.nn.functional import threshold, normalize
 import pandas as pd
@@ -108,7 +109,7 @@ lr = 1e-6
 wd = 0.01
 optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
-num_epochs = 100
+num_epochs = 60
 val_frequency = 4
 batch_size = 1
 prompt_batch_size = 10
@@ -132,16 +133,18 @@ val_loader = DataLoader(val_dset, batch_size=1)
 best_val_loss = 1000
 best_val_epoch = -1
 
+
 for epoch in range(num_epochs):
     epoch_losses = []
     val_losses = []
     
     sam_model.train()
-    for (imgs, gts, prompts, sizes, names) in train_loader:
+    for (imgs, gts, prompts, sizes, names) in tqdm(train_loader):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        
+        image_embedding_buffer = sam_model.image_encoder(imgs)
+
         # batch and shuffle prompts
         prompt_loader = DataLoader(
             bids_utils.PromptSet(prompts.squeeze()),
@@ -150,7 +153,7 @@ for epoch in range(num_epochs):
         )
         # train on every axon in the image
         for axon_ids, prompts in prompt_loader:
-            # build mask by summing individual masks at train-time
+            # build mask by stacking individual masks at train-time
             # this mask will contain prompt_batch_size myelin sheaths
             labels = torch.zeros_like(gts)
             for b in range(batch_size):
@@ -173,7 +176,7 @@ for epoch in range(num_epochs):
                     masks=None,
                 )
             # now we pass the image and prompt embeddings in the mask decoder
-            image_embedding = sam_model.image_encoder(imgs)
+            image_embedding = V(image_embedding_buffer)
 
             low_res_mask, _ = sam_model.mask_decoder(
                 image_embeddings=image_embedding,
@@ -195,8 +198,8 @@ for epoch in range(num_epochs):
             loss.backward()
             epoch_losses.append(loss.item())
         
-        optimizer.step()
-        optimizer.zero_grad()
+            optimizer.step()
+            optimizer.zero_grad()
 
     # validation loop
     if epoch % val_frequency == 0:
