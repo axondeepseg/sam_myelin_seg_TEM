@@ -24,19 +24,20 @@ from segment_anything.utils.transforms import ResizeLongestSide
 from utils import bids_utils
 
 torch.manual_seed(444)
+torch.autograd.set_detect_anomaly(True)
 
-# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-# preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/sam_vit_b_01ec64.pth'
-# device = 'cuda:0'
-datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
-preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
-device = 'cpu'
+datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
+device = 'cuda:0'
+# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+# preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+# val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+# device = 'cpu'
 model_type = 'vit_b'
 
 data_dict = bids_utils.index_bids_dataset(datapath)
@@ -137,11 +138,9 @@ for epoch in range(num_epochs):
     
     sam_model.train()
     for (imgs, gts, prompts, sizes, names) in train_loader:
-        break
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        image_embedding = sam_model.image_encoder(imgs)
         
         # batch and shuffle prompts
         prompt_loader = DataLoader(
@@ -158,7 +157,9 @@ for epoch in range(num_epochs):
                 mask = gts[b]
                 individual_masks = [get_myelin_mask(mask, a_id) for a_id in axon_ids]
                 individual_masks = torch.stack(individual_masks)
-                labels[b] = torch.sum(individual_masks, dim=0)
+                # labels[b] = torch.sum(individual_masks, dim=0)
+                # TODO: the GTs were summed but SAM outputs prompt_batch_size number of stacked masks...
+                labels = individual_masks
 
             # empty masks should not be processed
             if np.isnan(prompts).any():
@@ -172,6 +173,8 @@ for epoch in range(num_epochs):
                     masks=None,
                 )
             # now we pass the image and prompt embeddings in the mask decoder
+            image_embedding = sam_model.image_encoder(imgs)
+
             low_res_mask, _ = sam_model.mask_decoder(
                 image_embeddings=image_embedding,
                 image_pe=sam_model.prompt_encoder.get_dense_pe(),
@@ -187,13 +190,14 @@ for epoch in range(num_epochs):
             
             gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
             
-            optimizer.zero_grad()
             loss = loss_fn(upscaled_mask, gt_binary_mask)
+
             loss.backward()
-            optimizer.step()
-            
             epoch_losses.append(loss.item())
-    
+        
+        optimizer.step()
+        optimizer.zero_grad()
+
     # validation loop
     if epoch % val_frequency == 0:
         mean_val_loss = 0
@@ -205,7 +209,7 @@ for epoch in range(num_epochs):
                 v_sizes = (v_sizes[0][0], v_sizes[0][1])
                 mask = segment_image(sam_model, v_imgs, v_prompts, v_sizes, device)
                 gt_binary_mask = torch.as_tensor(v_gts > 0, dtype=torch.float32)
-                v_loss = loss_fn(mask, gt_binary_mask)
+                v_loss = loss_fn(mask, gt_binary_mask.to(device))
                 val_losses.append(v_loss.item())
         mean_val_loss = np.mean(val_losses)
 
