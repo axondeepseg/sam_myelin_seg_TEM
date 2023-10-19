@@ -37,8 +37,9 @@ device = 'cuda:0'
 # derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
 # preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
 # val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts//sam_vit_b_01ec64.pth'
+# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
 # device = 'cpu'
+
 model_type = 'vit_b'
 
 data_dict = bids_utils.index_bids_dataset(datapath)
@@ -57,7 +58,7 @@ def get_myelin_mask(myelin_map, axon_id):
 # Load the initial model checkpoint
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
-params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
+params = list(sam_model.mask_decoder.parameters())
 
 
 # utility function to segment the whole image without the SamPredictor class
@@ -105,7 +106,7 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
     return full_mask[None, :]
 
 # Training hyperparameters
-lr = 1e-6
+lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
@@ -143,7 +144,9 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        image_embedding_buffer = sam_model.image_encoder(imgs)
+
+        with torch.no_grad():
+            image_embedding = sam_model.image_encoder(imgs)
 
         # batch and shuffle prompts
         prompt_loader = DataLoader(
@@ -176,7 +179,6 @@ for epoch in range(num_epochs):
                     masks=None,
                 )
             # now we pass the image and prompt embeddings in the mask decoder
-            image_embedding = V(image_embedding_buffer)
 
             low_res_mask, _ = sam_model.mask_decoder(
                 image_embeddings=image_embedding,
