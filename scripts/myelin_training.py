@@ -163,9 +163,9 @@ for epoch in range(num_epochs):
                 mask = gts[b]
                 individual_masks = [get_myelin_mask(mask, a_id) for a_id in axon_ids]
                 individual_masks = torch.stack(individual_masks)
-                # labels[b] = torch.sum(individual_masks, dim=0)
+                labels[b] = torch.sum(individual_masks, dim=0)
                 # TODO: the GTs were summed but SAM outputs prompt_batch_size number of stacked masks...
-                labels = individual_masks
+                # labels = individual_masks
 
             # empty masks should not be processed
             if np.isnan(prompts).any():
@@ -192,10 +192,11 @@ for epoch in range(num_epochs):
                 input_size=input_size,
                 original_size=(sizes[0][0], sizes[0][1]),
             ).to(device)
+            upscaled_mask = torch.sum(upscaled_mask, dim=0)
             
             gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
-            
-            loss = loss_fn(upscaled_mask, gt_binary_mask)
+
+            loss = loss_fn(upscaled_mask, gt_binary_mask.squeeze(dim=0))
 
             loss.backward()
             epoch_losses.append(loss.item())
