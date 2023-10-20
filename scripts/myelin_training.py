@@ -52,7 +52,7 @@ def get_myelin_bbox(bbox_df, axon_id):
     return np.array(bbox_df.iloc[axon_id])
     
 def get_myelin_mask(myelin_map, axon_id):
-    return 255 * (myelin_map == axon_id + 1)
+    return (myelin_map == axon_id + 1)
 
 
 # Load the initial model checkpoint
@@ -68,7 +68,6 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
     
     input_size = imgs.shape
     imgs = sam_model.preprocess(imgs.to(device))
-    image_embedding = sam_model.image_encoder(imgs)
     
     prompts = bids_utils.PromptSet(prompts.squeeze())
     prompt_loader = DataLoader(prompts, batch_size=10)
@@ -78,6 +77,8 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
                 continue
         
         with torch.no_grad():
+            image_embedding = sam_model.image_encoder(imgs)
+            
             sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                 points=None,
                 boxes=bboxes.to(device),
@@ -179,7 +180,6 @@ for epoch in range(num_epochs):
                     masks=None,
                 )
             # now we pass the image and prompt embeddings in the mask decoder
-
             low_res_mask, _ = sam_model.mask_decoder(
                 image_embeddings=image_embedding,
                 image_pe=sam_model.prompt_encoder.get_dense_pe(),
