@@ -52,7 +52,7 @@ def get_myelin_bbox(bbox_df, axon_id):
     return np.array(bbox_df.iloc[axon_id])
     
 def get_myelin_mask(myelin_map, axon_id):
-    return (myelin_map == axon_id + 1)
+    return 255 * (myelin_map == axon_id + 1)
 
 
 # Load the initial model checkpoint
@@ -65,12 +65,11 @@ params = list(sam_model.mask_decoder.parameters())
 def segment_image(sam_model, imgs, prompts, original_size, device):
     
     full_mask = None
-    
     input_size = imgs.shape
     imgs = sam_model.preprocess(imgs.to(device))
     
     prompts = bids_utils.PromptSet(prompts.squeeze())
-    prompt_loader = DataLoader(prompts, batch_size=10)
+    prompt_loader = DataLoader(prompts, batch_size=prompt_batch_size)
     
     for _, bboxes in prompt_loader:
         if np.isnan(bboxes).any():
@@ -130,7 +129,7 @@ train_loader = DataLoader(
     batch_size=batch_size,
     shuffle=True,
 )
-val_loader = DataLoader(val_dset, batch_size=1)
+val_loader = DataLoader(val_dset, batch_size=batch_size)
 
 best_val_loss = 1000
 best_val_epoch = -1
@@ -145,7 +144,6 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-
         with torch.no_grad():
             image_embedding = sam_model.image_encoder(imgs)
 
@@ -164,9 +162,9 @@ for epoch in range(num_epochs):
                 mask = gts[b]
                 individual_masks = [get_myelin_mask(mask, a_id) for a_id in axon_ids]
                 individual_masks = torch.stack(individual_masks)
-                labels[b] = torch.sum(individual_masks, dim=0)
+                # labels[b] = torch.sum(individual_masks, dim=0)
                 # TODO: the GTs were summed but SAM outputs prompt_batch_size number of stacked masks...
-                # labels = individual_masks
+                labels = individual_masks
 
             # empty masks should not be processed
             if np.isnan(prompts).any():
@@ -189,10 +187,10 @@ for epoch in range(num_epochs):
             )
             upscaled_mask = sam_model.postprocess_masks(
                 low_res_mask,
-                input_size=input_size,
+                input_size=(input_size[-2], input_size[-1]),
                 original_size=(sizes[0][0], sizes[0][1]),
             ).to(device)
-            upscaled_mask = torch.sum(upscaled_mask, dim=0)
+            # upscaled_mask = torch.sum(upscaled_mask, dim=0)
             
             gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
 
