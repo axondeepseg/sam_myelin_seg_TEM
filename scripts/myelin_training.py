@@ -194,7 +194,7 @@ for epoch in range(num_epochs):
             
             gt_binary_mask = torch.as_tensor(labels.to(device) > 0, dtype=torch.float32)
 
-            loss = loss_fn(upscaled_mask, gt_binary_mask.squeeze(dim=0))
+            loss = loss_fn(upscaled_mask, gt_binary_mask)
 
             loss.backward()
             epoch_losses.append(loss.item())
