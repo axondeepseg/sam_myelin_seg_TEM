@@ -97,7 +97,7 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
                 (input_size[-2], input_size[-1]),
                 original_size,
             ).to(device)
-            combined_mask = torch.sum(mask, dim=0)
+            combined_mask = torch.sum(torch.sigmoid(mask), dim=0)
 
         if full_mask is None:
             full_mask = combined_mask
@@ -110,6 +110,7 @@ lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
+val_loss_fn = monai.losses.DiceLoss(sigmoid=False)
 num_epochs = 60
 val_frequency = 4
 batch_size = 1
@@ -213,7 +214,7 @@ for epoch in range(num_epochs):
                 v_sizes = (v_sizes[0][0], v_sizes[0][1])
                 mask = segment_image(sam_model, v_imgs, v_prompts, v_sizes, device)
                 gt_binary_mask = torch.as_tensor(v_gts > 0, dtype=torch.float32)
-                v_loss = loss_fn(mask, gt_binary_mask.to(device))
+                v_loss = val_loss_fn(mask, gt_binary_mask.to(device))
                 val_losses.append(v_loss.item())
         mean_val_loss = np.mean(val_losses)
 
