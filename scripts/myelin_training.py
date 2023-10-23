@@ -94,7 +94,7 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
             
             mask = sam_model.postprocess_masks(
                 low_res_mask,
-                input_size,
+                (input_size[-2], input_size[-1]),
                 original_size,
             ).to(device)
             combined_mask = torch.sum(mask, dim=0)
