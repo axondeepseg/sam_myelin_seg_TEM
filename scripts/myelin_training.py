@@ -106,12 +106,12 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
     return full_mask[None, :]
 
 # Training hyperparameters
-lr = 1e-4
+lr = 1e-6
 wd = 0.01
 optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 val_loss_fn = monai.losses.DiceLoss(sigmoid=False)
-num_epochs = 60
+num_epochs = 100
 val_frequency = 4
 batch_size = 1
 prompt_batch_size = 10
@@ -119,7 +119,7 @@ mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
-run_id = 'run1'
+run_id = 'run2'
 
 # loaders
 train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
