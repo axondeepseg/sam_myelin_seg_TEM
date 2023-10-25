@@ -58,7 +58,8 @@ def get_myelin_mask(myelin_map, axon_id):
 # Load the initial model checkpoint
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
-params = list(sam_model.mask_decoder.parameters())
+params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
+# params = list(sam_model.mask_decoder.parameters())
 
 
 # utility function to segment the whole image without the SamPredictor class
@@ -115,11 +116,12 @@ num_epochs = 100
 val_frequency = 4
 batch_size = 1
 prompt_batch_size = 10
+use_full_prompt_batch_size = True
 mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
-run_id = 'run2'
+run_id = 'run3'
 
 # loaders
 train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
@@ -145,12 +147,16 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        with torch.no_grad():
-            image_embedding = sam_model.image_encoder(imgs)
+        # with torch.no_grad():
+            # image_embedding = sam_model.image_encoder(imgs)
+        image_embedding = sam_model.image_encoder(imgs)
 
+        prompt_dataset = bids_utils.PromptSet(prompts.squeeze())
+        if use_full_prompt_batch_size:
+            prompt_batch_size = len(prompt_dataset)
         # batch and shuffle prompts
         prompt_loader = DataLoader(
-            bids_utils.PromptSet(prompts.squeeze()),
+            prompt_dataset,
             batch_size=prompt_batch_size,
             shuffle=True
         )
@@ -159,6 +165,7 @@ for epoch in range(num_epochs):
             # build mask by stacking individual masks at train-time
             # this mask will contain prompt_batch_size myelin sheaths
             labels = torch.zeros_like(gts)
+            # TODO: currently doesnt work for batch_size >1
             for b in range(batch_size):
                 mask = gts[b]
                 individual_masks = [get_myelin_mask(mask, a_id) for a_id in axon_ids]
