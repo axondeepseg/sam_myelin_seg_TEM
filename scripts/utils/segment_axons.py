@@ -19,8 +19,11 @@ def get_predictor(model_type, checkpoint, device):
     return SamPredictor(sam_model)
 
 def main(args):
-    model_type = args['model_type']
     checkpoint = args['checkpoint']
+    if 'vit_b' in checkpoint:
+        model_type = 'vit_b'
+    else:
+        model_type = 'vit_l'
     image_path = args['img']
     device = args['device']
     prompt_with_centroids = args['centroid_file'] != None
@@ -59,7 +62,6 @@ if __name__ == "__main__":
     parser.add_argument("img", help="Path to the image")
 
     # Optional argument which requires a parameter (eg. -d test)
-    parser.add_argument("-m", "--model_type", help="Model type", default="vit_b")
     parser.add_argument("-d", "--device", help="Torch device", default='cpu')
     parser.add_argument("-c", "--centroid_file", help="Path to CSV file containing axon centroids.", default=None)
 
