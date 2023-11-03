@@ -27,18 +27,18 @@ from utils import bids_utils
 torch.manual_seed(444)
 torch.autograd.set_detect_anomaly(True)
 
-datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
-derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
-preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
-# datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
-# derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
-# preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
-# val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
-# checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
-# device = 'cpu'
+# datapath = Path('/home/GRAMES.POLYMTL.CA/arcol/data_axondeepseg_tem')
+# derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/derivatives')
+# preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+# val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+# checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
+# device = 'cuda:0'
+datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
+derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
+preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
+val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
+checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
+device = 'cpu'
 
 model_type = 'vit_b'
 
@@ -106,6 +106,18 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
             full_mask += combined_mask
     return full_mask[None, :]
 
+def jitter_and_clamp(prompts, j_range, max_size):
+    'Jitter prompt coordinates and clamp them to [0, max_size-1] range.'
+    x0_jit = torch.randint_like(prompts[:, :, 1], low=-j_range, high=j_range)
+    y0_jit = torch.randint_like(prompts[:, :, 2], low=-j_range, high=j_range)
+    x1_jit = torch.randint_like(prompts[:, :, 3], low=-j_range, high=j_range)
+    y1_jit = torch.randint_like(prompts[:, :, 4], low=-j_range, high=j_range)
+    prompts[:, :, 1] = torch.clamp(prompts[:, :, 1] + x0_jit, min=0, max=max_size[0]-1)
+    prompts[:, :, 2] = torch.clamp(prompts[:, :, 2] + y0_jit, min=0, max=max_size[1]-1)
+    prompts[:, :, 3] = torch.clamp(prompts[:, :, 3] + x1_jit, min=0, max=max_size[0]-1)
+    prompts[:, :, 4] = torch.clamp(prompts[:, :, 4] + y1_jit, min=0, max=max_size[1]-1)
+    return prompts
+
 # Training hyperparameters
 lr = 1e-6
 wd = 0.01
@@ -121,6 +133,8 @@ mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
+jitter_coords = True
+jitter_range = 20
 run_id = 'run3'
 
 # loaders
@@ -137,7 +151,6 @@ val_loader = DataLoader(val_dset, batch_size=batch_size)
 best_val_loss = 1000
 best_val_epoch = -1
 
-
 for epoch in range(num_epochs):
     epoch_losses = []
     val_losses = []
@@ -147,9 +160,10 @@ for epoch in range(num_epochs):
         # IMG ENCODER
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
-        # with torch.no_grad():
-            # image_embedding = sam_model.image_encoder(imgs)
         image_embedding = sam_model.image_encoder(imgs)
+
+        if jitter_coords:
+            pass
 
         prompt_dataset = bids_utils.PromptSet(prompts.squeeze())
         if use_full_prompt_batch_size:
