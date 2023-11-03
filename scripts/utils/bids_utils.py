@@ -272,7 +272,7 @@ class MyelinDataset(Dataset):
         gt = gt[None, :, :]
         return (
             torch.tensor(img_1024).float(),
-            torch.tensor(gt).long(),
+            torch.tensor(gt).to(torch.int8),
             prompts_1024,
             torch.tensor(original_size),
             str(img_fname)
