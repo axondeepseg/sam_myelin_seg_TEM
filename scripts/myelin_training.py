@@ -40,6 +40,8 @@ device = 'cuda:0'
 # checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
 # device = 'cpu'
 
+print(f'current memory allocated (before everything): {torch.cuda.memory_allocated}')
+
 model_type = 'vit_b'
 
 data_dict = bids_utils.index_bids_dataset(datapath)
@@ -58,8 +60,7 @@ def get_myelin_mask(myelin_map, axon_id):
 # Load the initial model checkpoint
 sam_model = sam_model_registry[model_type](checkpoint=checkpoint)
 sam_model.to(device)
-params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
-# params = list(sam_model.mask_decoder.parameters())
+# params = list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters())
 
 
 # utility function to segment the whole image without the SamPredictor class
@@ -121,7 +122,11 @@ def jitter_and_clamp(prompts, j_range, max_size):
 # Training hyperparameters
 lr = 1e-6
 wd = 0.01
-optimizer = torch.optim.AdamW(params, lr=lr, weight_decay=wd)
+optimizer = torch.optim.AdamW(
+    params=list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters()), 
+    lr=lr, 
+    weight_decay=wd
+)
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
 val_loss_fn = monai.losses.DiceLoss(sigmoid=False)
 num_epochs = 100
@@ -145,11 +150,14 @@ train_loader = DataLoader(
     train_dset,
     batch_size=batch_size,
     shuffle=True,
+    device=device
 )
-val_loader = DataLoader(val_dset, batch_size=batch_size)
+val_loader = DataLoader(val_dset, batch_size=batch_size, device=device)
 
 best_val_loss = 1000
 best_val_epoch = -1
+
+print(f'current memory allocated (before training loop): {torch.cuda.memory_allocated}')
 
 for epoch in range(num_epochs):
     epoch_losses = []
@@ -158,9 +166,14 @@ for epoch in range(num_epochs):
     sam_model.train()
     for (imgs, gts, prompts, sizes, names) in tqdm(train_loader):
         # IMG ENCODER
+        print(f'current memory allocated (start of training loop): {torch.cuda.memory_allocated}')
+
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
         image_embedding = sam_model.image_encoder(imgs)
+
+        print(f'current memory allocated (before loading bboxes): {torch.cuda.memory_allocated}')
+
 
         if jitter_coords:
             prompts = jitter_and_clamp(prompts, jitter_range, input_size[-2:])
