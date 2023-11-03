@@ -32,15 +32,13 @@ derivatives_path = Path('/home/GRAMES.POLYMTL.CA/arcol/collin_project/scripts/de
 preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
 val_preprocessed_datapath = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 checkpoint = '/home/GRAMES.POLYMTL.CA/arcol/sam_myelin_seg_TEM/scripts/sam_vit_b_01ec64.pth'
-device = 'cuda:0'
+device = 'cuda:1'
 # datapath = Path('/home/herman/Documents/NEUROPOLY_21/datasets/data_axondeepseg_tem/')
 # derivatives_path = Path('/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/derivatives/')
 # preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/train/'
 # val_preprocessed_datapath = '/home/herman/Documents/NEUROPOLY_23/20230512_SAM/sam_myelin_seg_TEM/scripts/tem_split_full/val/'
 # checkpoint = '/home/herman/Documents/NEUROPOLY_22/COURS_MAITRISE/GBM6953EE_brainhacks_school/collin_project/scripts/sam_vit_b_01ec64.pth'
 # device = 'cpu'
-
-print(f'current memory allocated (before everything): {torch.cuda.memory_allocated}')
 
 model_type = 'vit_b'
 
@@ -120,7 +118,7 @@ def jitter_and_clamp(prompts, j_range, max_size):
     return prompts
 
 # Training hyperparameters
-lr = 1e-6
+lr = 1e-5
 wd = 0.01
 optimizer = torch.optim.AdamW(
     params=list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters()), 
@@ -150,14 +148,11 @@ train_loader = DataLoader(
     train_dset,
     batch_size=batch_size,
     shuffle=True,
-    device=device
 )
-val_loader = DataLoader(val_dset, batch_size=batch_size, device=device)
+val_loader = DataLoader(val_dset, batch_size=batch_size)
 
 best_val_loss = 1000
 best_val_epoch = -1
-
-print(f'current memory allocated (before training loop): {torch.cuda.memory_allocated}')
 
 for epoch in range(num_epochs):
     epoch_losses = []
@@ -166,14 +161,10 @@ for epoch in range(num_epochs):
     sam_model.train()
     for (imgs, gts, prompts, sizes, names) in tqdm(train_loader):
         # IMG ENCODER
-        print(f'current memory allocated (start of training loop): {torch.cuda.memory_allocated}')
 
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
         image_embedding = sam_model.image_encoder(imgs)
-
-        print(f'current memory allocated (before loading bboxes): {torch.cuda.memory_allocated}')
-
 
         if jitter_coords:
             prompts = jitter_and_clamp(prompts, jitter_range, input_size[-2:])
