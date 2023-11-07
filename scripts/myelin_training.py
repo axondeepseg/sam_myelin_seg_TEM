@@ -237,7 +237,7 @@ for epoch in range(num_epochs):
             optimizer.step()
             optimizer.zero_grad()
 
-    # validation loop
+    # VALIDATION LOOP
     if epoch % val_frequency == 0:
         mean_val_loss = 0
         val_epochs.append(epoch)
@@ -246,8 +246,14 @@ for epoch in range(num_epochs):
         with torch.no_grad():
             for v_imgs, v_gts, v_prompts, v_sizes, _ in val_loader:
                 v_sizes = (v_sizes[0][0], v_sizes[0][1])
+                # stack GTs
+                for b in range(batch_size):
+                    mask = v_gts[b]
+                    individual_masks = [get_myelin_mask(mask, a_id) for a_id in range(1, np.max(v_gts))]
+                    v_gts = torch.stack(individual_masks)
+
                 mask = segment_image(
-                    model=sam_model, 
+                    sam_model=sam_model, 
                     imgs=v_imgs, 
                     prompts=v_prompts, 
                     original_size=v_sizes, 
