@@ -236,6 +236,8 @@ for epoch in range(num_epochs):
         
             optimizer.step()
             optimizer.zero_grad()
+    mean_epoch_losses.append(np.mean(epoch_losses))
+    print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
 
     # VALIDATION LOOP
     if epoch % val_frequency == 0:
@@ -274,8 +276,6 @@ for epoch in range(num_epochs):
             best_val_loss = mean_val_loss
             best_val_epoch = epoch
             torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_myelin-seg_{run_id}_best.pth')
-    mean_epoch_losses.append(np.mean(epoch_losses))
-    print(f'EPOCH {epoch} MEAN LOSS: {mean_epoch_losses[-1]}')
 torch.save(sam_model.state_dict(), f'sam_vit_b_01ec64_myelin-seg_{run_id}_final.pth')
 
 # Plot mean epoch losses
