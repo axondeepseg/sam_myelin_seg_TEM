@@ -62,7 +62,7 @@ sam_model.to(device)
 
 
 # utility function to segment the whole image without the SamPredictor class
-def segment_image(sam_model, imgs, prompts, original_size, device):
+def segment_image(sam_model, imgs, prompts, original_size, prompt_batch_size, device, merge_masks=True):
     
     full_mask = None
     input_size = imgs.shape
@@ -97,13 +97,22 @@ def segment_image(sam_model, imgs, prompts, original_size, device):
                 (input_size[-2], input_size[-1]),
                 original_size,
             ).to(device)
-            combined_mask = torch.sum(torch.sigmoid(mask), dim=0)
 
-        if full_mask is None:
-            full_mask = combined_mask
+        if merge_masks:
+            combined_mask = torch.sum(torch.sigmoid(mask), dim=0)
+            if full_mask is None:
+                full_mask = combined_mask
+            else:
+                full_mask += combined_mask
         else:
-            full_mask += combined_mask
-    return full_mask[None, :]
+            if full_mask is None:
+                full_mask = mask
+            else:
+                full_mask = torch.cat([full_mask, mask], dim=0)
+    if merge_masks:
+        return full_mask[None, :]
+    else:
+        return full_mask
 
 def jitter_and_clamp(prompts, j_range, max_size):
     'Jitter prompt coordinates and clamp them to [0, max_size-1] range.'
@@ -169,6 +178,7 @@ for epoch in range(num_epochs):
         if jitter_coords:
             prompts = jitter_and_clamp(prompts, jitter_range, input_size[-2:])
         prompt_dataset = bids_utils.PromptSet(prompts.squeeze())
+
         if use_full_prompt_batch_size:
             prompt_batch_size = len(prompt_dataset)
         # batch and shuffle prompts
@@ -180,7 +190,7 @@ for epoch in range(num_epochs):
         # train on every axon in the image
         for axon_ids, prompts in prompt_loader:
             # build mask by stacking individual masks at train-time
-            # this mask will contain prompt_batch_size myelin sheaths
+            # this mask will contain prompt_batch_size stacked myelin sheaths
             labels = torch.zeros_like(gts)
             # TODO: currently doesnt work for batch_size >1
             for b in range(batch_size):
@@ -236,7 +246,15 @@ for epoch in range(num_epochs):
         with torch.no_grad():
             for v_imgs, v_gts, v_prompts, v_sizes, _ in val_loader:
                 v_sizes = (v_sizes[0][0], v_sizes[0][1])
-                mask = segment_image(sam_model, v_imgs, v_prompts, v_sizes, device)
+                mask = segment_image(
+                    model=sam_model, 
+                    imgs=v_imgs, 
+                    prompts=v_prompts, 
+                    original_size=v_sizes, 
+                    prompt_batch_size=prompt_batch_size, 
+                    device=device, 
+                    merge_masks=False
+                )
                 gt_binary_mask = torch.as_tensor(v_gts > 0, dtype=torch.float32)
                 v_loss = val_loss_fn(mask, gt_binary_mask.to(device))
                 val_losses.append(v_loss.item())
