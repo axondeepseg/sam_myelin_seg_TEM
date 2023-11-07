@@ -249,7 +249,7 @@ for epoch in range(num_epochs):
                 # stack GTs
                 for b in range(batch_size):
                     mask = v_gts[b]
-                    individual_masks = [get_myelin_mask(mask, a_id) for a_id in range(1, np.max(v_gts))]
+                    individual_masks = [get_myelin_mask(mask, a_id) for a_id in range(1, torch.max(v_gts)+1)]
                     v_gts = torch.stack(individual_masks)
 
                 mask = segment_image(
