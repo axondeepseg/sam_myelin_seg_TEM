@@ -1,0 +1,10 @@
+# segment-anything should be installed from source
+
+torch
+torchvision
+opencv-python 
+pycocotools
+matplotlib
+pandas
+tqdm
+monai
