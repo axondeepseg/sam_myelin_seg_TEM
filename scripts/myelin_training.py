@@ -170,8 +170,7 @@ for epoch in range(num_epochs):
     
     sam_model.train()
     for (imgs, gts, prompts, sizes, names) in tqdm(train_loader):
-        # IMG ENCODER
-
+        ########################### IMG ENCODER ###########################
         input_size = imgs.shape
         imgs = sam_model.preprocess(imgs.to(device))
         image_embedding = sam_model.image_encoder(imgs)
@@ -206,13 +205,15 @@ for epoch in range(num_epochs):
             if np.isnan(prompts).any():
                 continue
             
-            # no grad for the prompt encoder
+            ########################### PROMPT ENCODER ###########################
             with torch.no_grad():
                 sparse_embeddings, dense_embeddings = sam_model.prompt_encoder(
                     points=None,
                     boxes=prompts.to(device),
                     masks=None,
                 )
+
+            ########################### MASK DECODER ###########################
             # now we pass the image and prompt embeddings in the mask decoder
             low_res_mask, _ = sam_model.mask_decoder(
                 image_embeddings=image_embedding,
@@ -252,7 +253,7 @@ for epoch in range(num_epochs):
                 # stack GTs
                 for b in range(batch_size):
                     mask = v_gts[b]
-                    individual_masks = [get_myelin_mask(mask, a_id) for a_id in range(1, torch.max(v_gts)+1)]
+                    individual_masks = [get_myelin_mask(mask, a_id) for a_id in range(torch.max(v_gts))]
                     v_gts = torch.stack(individual_masks)
 
                 mask = segment_image(
