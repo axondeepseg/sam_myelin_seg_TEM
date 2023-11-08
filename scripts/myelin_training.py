@@ -62,19 +62,20 @@ sam_model.to(device)
 
 
 # utility function to segment the whole image without the SamPredictor class
-def segment_image(sam_model, imgs, prompts, original_size, prompt_batch_size, device, merge_masks=True):
+def segment_image(sam_model, imgs, prompts, original_size, device, merge_masks=True):
     
     full_mask = None
     input_size = imgs.shape
     imgs = sam_model.preprocess(imgs.to(device))
-    
+
     prompts = bids_utils.PromptSet(prompts.squeeze())
+    prompt_batch_size = len(prompts)
     prompt_loader = DataLoader(prompts, batch_size=prompt_batch_size)
-    
+
     for _, bboxes in prompt_loader:
         if np.isnan(bboxes).any():
                 continue
-        
+
         with torch.no_grad():
             image_embedding = sam_model.image_encoder(imgs)
             
@@ -261,7 +262,6 @@ for epoch in range(num_epochs):
                     imgs=v_imgs, 
                     prompts=v_prompts, 
                     original_size=v_sizes, 
-                    prompt_batch_size=prompt_batch_size, 
                     device=device, 
                     merge_masks=False
                 )
