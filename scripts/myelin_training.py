@@ -109,6 +109,7 @@ def segment_image(sam_model, imgs, prompts, original_size, prompt_batch_size, de
                 full_mask = mask
             else:
                 full_mask = torch.cat([full_mask, mask], dim=0)
+
     if merge_masks:
         return full_mask[None, :]
     else:
@@ -135,7 +136,7 @@ optimizer = torch.optim.AdamW(
     weight_decay=wd
 )
 loss_fn = monai.losses.DiceLoss(sigmoid=True)
-val_loss_fn = monai.losses.DiceLoss(sigmoid=False)
+val_loss_fn = monai.losses.DiceLoss(sigmoid=True)
 num_epochs = 100
 val_frequency = 4
 batch_size = 1
