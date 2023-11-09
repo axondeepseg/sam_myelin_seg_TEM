@@ -146,7 +146,6 @@ use_full_prompt_batch_size = True
 mean_epoch_losses = []
 mean_val_losses = []
 val_epochs = []
-transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 jitter_coords = True
 jitter_range = 10
 run_id = 'run5'

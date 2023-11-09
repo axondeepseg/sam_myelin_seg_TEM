@@ -10,6 +10,7 @@ import pandas as pd
 import cv2
 import torch
 from segment_anything import SamPredictor, sam_model_registry
+from segment_anything.utils.transforms import ResizeLongestSide
 
 import bids_utils
 
@@ -44,10 +45,14 @@ def main(args):
         if is_myelin_model:
             prompts = pd.read_csv(args['centroid_file'])
             prompts = torch.tensor(prompts.drop(columns=['x0', 'y0']).values).to(device)
+            # get rid of axon IDs
+            prompts = prompts[:, 1:]
+            transform = ResizeLongestSide(1024)
+            prompts_transformed = transform.apply_boxes_torch(prompts, image.shape[-2:])
             mask, _, _ = predictor.predict_torch(
                 point_coords=None,
                 point_labels=None,
-                boxes=prompts[:, 1:],
+                boxes=prompts_transformed,
                 multimask_output=False
             )
             mask = torch.sum(mask, dim=0) > 0
@@ -74,7 +79,7 @@ def main(args):
     if not is_myelin_model:
         fname = f'{Path(image_path).parent / Path(image_path).stem}_axonseg.png'
     else:
-        fname = f'{Path(image_path).parent / Path(image_path).stem}_myelin  seg.png'
+        fname = f'{Path(image_path).parent / Path(image_path).stem}_myelinseg.png'
     cv2.imwrite(fname, mask[0] * 255)
 
 
