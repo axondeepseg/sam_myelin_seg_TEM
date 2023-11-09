@@ -129,7 +129,7 @@ def jitter_and_clamp(prompts, j_range, max_size):
     return prompts
 
 # Training hyperparameters
-lr = 1e-6
+lr = 1e-4
 wd = 0.01
 optimizer = torch.optim.AdamW(
     params=list(sam_model.image_encoder.parameters()) + list(sam_model.mask_decoder.parameters()), 
@@ -149,7 +149,7 @@ val_epochs = []
 transform = ResizeLongestSide(sam_model.image_encoder.img_size)
 jitter_coords = True
 jitter_range = 10
-run_id = 'run4'
+run_id = 'run5'
 
 # loaders
 train_dset = bids_utils.MyelinDataset(preprocessed_datapath)
