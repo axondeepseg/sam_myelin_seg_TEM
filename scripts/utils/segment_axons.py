@@ -71,8 +71,10 @@ def main(args):
             multimask_output=False
         )
 
-
-    fname = f'{Path(image_path).parent / Path(image_path).stem}_axonseg.png'
+    if not is_myelin_model:
+        fname = f'{Path(image_path).parent / Path(image_path).stem}_axonseg.png'
+    else:
+        fname = f'{Path(image_path).parent / Path(image_path).stem}_myelin  seg.png'
     cv2.imwrite(fname, mask[0] * 255)
 
 
