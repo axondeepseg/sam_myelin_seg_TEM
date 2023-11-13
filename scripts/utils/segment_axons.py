@@ -48,7 +48,9 @@ def main(args):
             # get rid of axon IDs
             prompts = prompts[:, 1:]
             transform = ResizeLongestSide(1024)
-            prompts_transformed = transform.apply_boxes_torch(prompts, image.shape[-2:])
+            prompts_transformed = transform.apply_boxes_torch(prompts, image.shape[:2])
+            # NOTE: unlike SamPredictor.predict, predict_torch assumes input pts have 
+            # already been transformed to the input frame
             mask, _, _ = predictor.predict_torch(
                 point_coords=None,
                 point_labels=None,
